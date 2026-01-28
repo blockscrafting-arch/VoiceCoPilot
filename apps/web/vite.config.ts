@@ -2,6 +2,9 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
+const devPort = Number(process.env.PORT) || 1420;
+const previewPort = Number(process.env.PORT) || 4173;
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
@@ -12,7 +15,13 @@ export default defineConfig({
   },
   // Tauri expects a fixed port
   server: {
-    port: 1420,
+    host: true,
+    port: devPort,
+    strictPort: true,
+  },
+  preview: {
+    host: true,
+    port: previewPort,
     strictPort: true,
   },
   // Build settings for Tauri
