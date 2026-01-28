@@ -1,0 +1,23 @@
+{
+  "name": "voicecopilot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Real-time voice copilot for calls with AI-powered suggestions",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:web": "pnpm --filter @voicecopilot/web dev",
+    "dev:api": "pnpm --filter @voicecopilot/api dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.2.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

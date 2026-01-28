@@ -1,0 +1,34 @@
+[package]
+name = "voicecopilot"
+version = "0.1.0"
+description = "Real-time voice copilot for calls"
+authors = ["VoiceCoPilot"]
+edition = "2021"
+
+[lib]
+name = "voicecopilot_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+base64 = "0.22"
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Audio capture
+cpal = "0.15"
+wasapi = "0.22"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-shell = "2"
+
+[profile.dev]
+opt-level = 0
+incremental = true
+
+[profile.release]
+lto = "thin"

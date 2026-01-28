@@ -1,0 +1,106 @@
+"""FastAPI application entry point."""
+
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+import json
+import os
+import socket
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from .config import settings
+from .logging_config import get_logger, setup_logging
+from .routers import audio, context, health, projects, suggestions
+from .services.db import init_db
+
+logger = get_logger(__name__)
+
+DEBUG_LOG_PATH = r"d:\vladexecute\proj\VoiceCoPilot\.cursor\debug.log"
+
+
+def _debug_log(hypothesis_id: str, message: str, data: dict) -> None:
+    payload = {
+        "sessionId": "debug-session",
+        "runId": "run1",
+        "hypothesisId": hypothesis_id,
+        "location": "main.py:24",
+        "message": message,
+        "data": data,
+        "timestamp": int(__import__("time").time() * 1000),
+    }
+    try:
+        Path(DEBUG_LOG_PATH).parent.mkdir(parents=True, exist_ok=True)
+        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Application lifespan manager.
+
+    Handles startup and shutdown events.
+
+    Args:
+        app: FastAPI application instance.
+
+    Yields:
+        None during application runtime.
+    """
+    # Startup
+    setup_logging()
+    logger.info("VoiceCoPilot API starting", version="0.1.0")
+    init_db()
+    ready_port = os.getenv("VOICECOPILOT_READY_PORT")
+    if ready_port:
+        try:
+            with socket.create_connection(("127.0.0.1", int(ready_port)), timeout=2) as conn:
+                conn.sendall(b"ready")
+            # region agent log
+            _debug_log("H5", "api_ready_sent", {"port": ready_port})
+            # endregion
+        except Exception as exc:
+            # region agent log
+            _debug_log("H5", "api_ready_failed", {"error": str(exc), "port": ready_port})
+            # endregion
+    yield
+    # Shutdown
+    logger.info("VoiceCoPilot API shutting down")
+
+
+app = FastAPI(
+    title="VoiceCoPilot API",
+    description="Real-time voice assistance backend",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+# CORS for desktop app
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Tauri app
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(health.router, tags=["health"])
+app.include_router(audio.router, prefix="/api/audio", tags=["audio"])
+app.include_router(suggestions.router, prefix="/api/suggestions", tags=["suggestions"])
+app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
+app.include_router(context.router, prefix="/api/projects", tags=["context"])
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        "voicecopilot_api.main:app",
+        host=settings.api_host,
+        port=settings.api_port,
+        reload=True,
+    )

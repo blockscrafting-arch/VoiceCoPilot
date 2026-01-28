@@ -1,0 +1,49 @@
+---
+description: Правила backend, логирование, docstrings
+globs: apps/api/**/*.py
+alwaysApply: false
+---
+
+# Backend правила
+
+## Структура
+- Роутеры в `routers/`, сервисы в `services/`, модели в `models/`.
+- Конфиг через Pydantic Settings (`config.py`).
+
+## Логирование
+- Используй `structlog` или стандартный `logging` с JSON‑форматом.
+- Логируй все ошибки с traceback и контекстом.
+- Уровни: DEBUG для разработки, INFO/WARNING/ERROR в проде.
+
+```python
+# ❌ Плохо
+except Exception:
+    pass
+
+# ✅ Хорошо
+except Exception as e:
+    logger.exception("Ошибка обработки аудио", extra={"chunk_id": chunk_id})
+    raise
+```
+
+## Docstrings (Google style)
+```python
+def transcribe(audio: bytes, lang: str = "ru") -> str:
+    """Распознаёт речь из аудио.
+
+    Args:
+        audio: PCM‑данные 16 kHz mono.
+        lang: Код языка ISO 639‑1.
+
+    Returns:
+        Распознанный текст.
+
+    Raises:
+        TranscriptionError: Если STT недоступен.
+    """
+```
+
+## WebSocket
+- Используй `fastapi.WebSocket`.
+- Обрабатывай `WebSocketDisconnect` корректно.
+- Пинг‑понг для keep‑alive.

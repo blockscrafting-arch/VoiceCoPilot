@@ -1,0 +1,20 @@
+{
+  "name": "VoiceCoPilot Audio Capture",
+  "version": "0.1.0",
+  "manifest_version": 3,
+  "description": "Capture system/tab audio and stream to VoiceCoPilot web UI.",
+  "permissions": ["tabCapture", "activeTab", "scripting", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "action": {
+    "default_title": "VoiceCoPilot"
+  }
+}
