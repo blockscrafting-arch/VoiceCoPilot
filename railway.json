@@ -7,7 +7,6 @@
   "deploy": {
     "numReplicas": 1,
     "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10,
-    "startCommand": "/bin/sh -c \"cd /app/apps/web && exec serve -s dist -l 0.0.0.0:$PORT\""
+    "restartPolicyMaxRetries": 10
   }
 }
