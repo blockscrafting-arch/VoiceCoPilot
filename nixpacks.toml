@@ -1,2 +1,2 @@
 [start]
-cmd = "pnpm --filter @voicecopilot/web start"
+cmd = "node scripts/railway-start.js"
