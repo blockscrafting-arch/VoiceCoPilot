@@ -5,6 +5,7 @@ from typing import AsyncGenerator
 import json
 import os
 import socket
+import threading
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -60,10 +61,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:
         logger.exception("Database init failed; app will start but projects may fail", error=str(exc))
     if settings.stt_provider == "local":
-        try:
-            get_transcription_service().ensure_model_loaded()
-        except Exception as exc:
-            logger.warning("STT warmup failed; first transcription will be slower", error=str(exc))
+        def _warmup_stt() -> None:
+            try:
+                get_transcription_service().ensure_model_loaded()
+            except Exception as exc:
+                logger.warning("STT warmup failed; first transcription will be slower", error=str(exc))
+        threading.Thread(target=_warmup_stt, daemon=True).start()
     ready_port = os.getenv("VOICECOPILOT_READY_PORT")
     if ready_port:
         try:
