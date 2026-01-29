@@ -1,0 +1,10 @@
+# Web Dockerfile context (repo root) — keep context small
+.git
+.cursor
+*.log
+.env
+.env.*
+apps/api
+node_modules
+**/node_modules
+**/dist
