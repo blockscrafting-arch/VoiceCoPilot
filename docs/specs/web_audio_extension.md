@@ -25,6 +25,14 @@ Use `window.postMessage` with a fixed `source` field to avoid collisions.
 ```json
 {
   "source": "voicecopilot-extension",
+  "type": "ready"
+}
+```
+(Sent once on content script load so the page can detect extension presence.)
+
+```json
+{
+  "source": "voicecopilot-extension",
   "type": "audioChunk",
   "speaker": "other",
   "sampleRate": 48000,
@@ -85,6 +93,16 @@ Use existing JSON base64 format in `apps/web/src/lib/api.ts`.
 - Use `X-Project-Token` header on REST requests.
 - For WebSocket, include `?token=...` or send an initial JSON auth message.
 
+### Extension detection (fallback)
+- Content script sends `{ source: "voicecopilot-extension", type: "ready" }` on load.
+- Web UI listens for `ready` and sets `extensionAvailable`. If no `ready` before user starts capture, UI uses getDisplayMedia fallback.
+
+### Fallback without extension (getDisplayMedia)
+- If the extension is not installed, Web UI calls `navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })` on "Start stream".
+- User picks a screen, window, or browser tab; audio from that source is captured as `speaker: "other"` and sent to the API WebSocket (same payload format).
+- Requires the user to choose a source that includes audio (e.g. "Share tab audio" in Chrome). If no audio tracks, UI shows an error.
+
 ### Notes
-- System audio capture is only possible with browser extension APIs.
+- System audio capture is only possible with browser extension APIs (e.g. tabCapture).
 - Microphone capture can stay in Web UI via Web Audio API.
+- getDisplayMedia provides tab/window/screen capture with audio without an extension; use it as fallback when the extension is not available.

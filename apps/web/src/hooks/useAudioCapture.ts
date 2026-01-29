@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Audio capture state and controls.
@@ -40,9 +40,10 @@ interface AudioChunkPayload {
 }
 
 /**
- * Hook for managing audio capture via Tauri.
+ * Hook for managing audio capture (mic + extension or getDisplayMedia fallback).
  *
  * @param onAudioChunk - Callback for received audio chunks
+ * @param onConfig - Callback for stream config (sample rate, channels, speaker)
  * @returns Audio capture state and controls
  */
 export function useAudioCapture(
@@ -57,6 +58,22 @@ export function useAudioCapture(
   const extensionListenerRef = useRef<((event: MessageEvent) => void) | null>(null);
   const extensionConfigSent = useRef(false);
   const micConfigSent = useRef(false);
+  const extensionAvailableRef = useRef(false);
+  const displayStreamRef = useRef<MediaStream | null>(null);
+  const displayAudioContextRef = useRef<AudioContext | null>(null);
+  const displayProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const displayConfigSent = useRef(false);
+
+  // Detect extension via "ready" message from content script
+  useEffect(() => {
+    const onReady = (event: MessageEvent) => {
+      if (event.data?.source === "voicecopilot-extension" && event.data?.type === "ready") {
+        extensionAvailableRef.current = true;
+      }
+    };
+    window.addEventListener("message", onReady);
+    return () => window.removeEventListener("message", onReady);
+  }, []);
 
   const startCapture = useCallback(async () => {
     try {
@@ -98,47 +115,97 @@ export function useAudioCapture(
         micConfigSent.current = true;
       }
 
-      // Extension listener for system audio
-      const extensionListener = (event: MessageEvent) => {
-        if (!event.data || event.data.source !== "voicecopilot-extension") {
-          return;
+      // "Other" audio: extension or getDisplayMedia fallback
+      if (extensionAvailableRef.current) {
+        const extensionListener = (event: MessageEvent) => {
+          if (!event.data || event.data.source !== "voicecopilot-extension") {
+            return;
+          }
+          if (event.data.type === "audioChunk") {
+            const payload: AudioChunkPayload = {
+              speaker: "other",
+              data: new Uint8Array(event.data.data),
+              sampleRate: event.data.sampleRate,
+              channels: event.data.channels,
+            };
+            if (!extensionConfigSent.current && onConfig) {
+              onConfig({
+                sample_rate: payload.sampleRate,
+                channels: payload.channels,
+                speaker: "other",
+              });
+              configs.push({
+                sample_rate: payload.sampleRate,
+                channels: payload.channels,
+                speaker: "other",
+              });
+              extensionConfigSent.current = true;
+            }
+            if (onAudioChunk) {
+              onAudioChunk(payload.data, "other");
+            }
+          }
+          if (event.data.type === "status" && event.data.status === "error") {
+            setError(event.data.message || "Ошибка расширения");
+          }
+        };
+        extensionListenerRef.current = extensionListener;
+        window.addEventListener("message", extensionListener);
+        window.postMessage(
+          { source: "voicecopilot-web", type: "startCapture", mode: "system" },
+          "*"
+        );
+      } else {
+        // Fallback: getDisplayMedia (screen/tab + audio)
+        if (!navigator.mediaDevices?.getDisplayMedia) {
+          setError("Захват экрана недоступен в этом браузере");
+          setIsCapturing(true);
+          return configs;
         }
-        if (event.data.type === "audioChunk") {
-          const payload: AudioChunkPayload = {
-            speaker: "other",
-            data: new Uint8Array(event.data.data),
-            sampleRate: event.data.sampleRate,
-            channels: event.data.channels,
-          };
-          if (!extensionConfigSent.current && onConfig) {
-            onConfig({
-              sample_rate: payload.sampleRate,
-              channels: payload.channels,
-              speaker: "other",
-            });
-            configs.push({
-              sample_rate: payload.sampleRate,
-              channels: payload.channels,
-              speaker: "other",
-            });
-            extensionConfigSent.current = true;
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true,
+        });
+        const audioTracks = displayStream.getAudioTracks();
+        if (!audioTracks.length) {
+          displayStream.getTracks().forEach((t) => t.stop());
+          setError("Выберите экран или вкладку с включённым звуком");
+          setIsCapturing(true);
+          return configs;
+        }
+        displayStreamRef.current = displayStream;
+        const displayCtx = new AudioContext();
+        displayAudioContextRef.current = displayCtx;
+        const displaySource = displayCtx.createMediaStreamSource(displayStream);
+        const displayProcessor = displayCtx.createScriptProcessor(4096, 2, 1);
+        displayProcessorRef.current = displayProcessor;
+        displayProcessor.onaudioprocess = (event) => {
+          const input = event.inputBuffer.getChannelData(0);
+          const ch1 = event.inputBuffer.numberOfChannels > 1 ? event.inputBuffer.getChannelData(1) : null;
+          const pcm16 = new Int16Array(input.length);
+          for (let i = 0; i < input.length; i += 1) {
+            let sample = input[i];
+            if (ch1) sample = (sample + ch1[i]) / 2;
+            sample = Math.max(-1, Math.min(1, sample));
+            pcm16[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
           }
           if (onAudioChunk) {
-            onAudioChunk(payload.data, "other");
+            onAudioChunk(new Uint8Array(pcm16.buffer), "other");
           }
+        };
+        displaySource.connect(displayProcessor);
+        displayProcessor.connect(displayCtx.destination);
+        if (!displayConfigSent.current && onConfig) {
+          const otherConfig = {
+            sample_rate: displayCtx.sampleRate,
+            channels: 1,
+            speaker: "other" as const,
+          };
+          onConfig(otherConfig);
+          configs.push(otherConfig);
+          displayConfigSent.current = true;
         }
-        if (event.data.type === "status" && event.data.status === "error") {
-          setError(event.data.message || "Ошибка расширения");
-        }
-      };
-      extensionListenerRef.current = extensionListener;
-      window.addEventListener("message", extensionListener);
-
-      // Ask extension to start capture
-      window.postMessage(
-        { source: "voicecopilot-web", type: "startCapture", mode: "system" },
-        "*"
-      );
+      }
 
       setIsCapturing(true);
       return configs;
@@ -160,6 +227,19 @@ export function useAudioCapture(
         window.removeEventListener("message", extensionListenerRef.current);
         extensionListenerRef.current = null;
       }
+      if (displayProcessorRef.current) {
+        displayProcessorRef.current.disconnect();
+        displayProcessorRef.current = null;
+      }
+      if (displayAudioContextRef.current) {
+        await displayAudioContextRef.current.close();
+        displayAudioContextRef.current = null;
+      }
+      if (displayStreamRef.current) {
+        displayStreamRef.current.getTracks().forEach((track) => track.stop());
+        displayStreamRef.current = null;
+      }
+      displayConfigSent.current = false;
       if (processorRef.current) {
         processorRef.current.disconnect();
         processorRef.current = null;

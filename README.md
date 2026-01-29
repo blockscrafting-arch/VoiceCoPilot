@@ -4,10 +4,10 @@ Real-time voice copilot for calls — listens to your microphone and system audi
 
 ## Features
 
-- Captures microphone and system audio (Windows WASAPI loopback)
+- Captures microphone and system/tab audio (Windows WASAPI loopback for desktop; browser extension or getDisplayMedia for Web UI)
 - Real-time speech recognition (faster-whisper)
 - Context-aware suggestions via LLM (Gemini via OpenRouter)
-- Desktop app with overlay UI
+- Desktop app (Tauri) with overlay UI; Web UI (Vercel + Railway) with screen/tab audio
 
 ## Tech Stack
 
@@ -29,6 +29,9 @@ docs/           # Documentation and ADRs
 ```
 
 ## Quick Start
+
+- **Desktop:** run API + Tauri app locally (see Setup below).
+- **Web:** deploy API to Railway, frontend to Vercel; optionally install the browser extension or use screen/tab sharing. See [docs/DEPLOY_WEB.md](docs/DEPLOY_WEB.md).
 
 ### Prerequisites
 

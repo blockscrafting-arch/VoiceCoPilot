@@ -97,21 +97,26 @@ pnpm test
 
 ## Деплой на Railway
 
-### API сервер
+Полный веб-деплой (API + фронт + переменные) описан в [DEPLOY_WEB.md](DEPLOY_WEB.md).
+
+### API сервер (кратко)
 
 1. Создайте проект на [railway.app](https://railway.app)
 2. Подключите GitHub репозиторий
-3. Укажите корневую директорию: `apps/api`
+3. Соберите из `apps/api` (Dockerfile или Nixpacks)
 4. Добавьте переменные окружения:
-   - `OPENROUTER_API_KEY`
+   - `OPENROUTER_API_KEY` (обязательно)
+   - `DATABASE_URL` (если используется БД для проектов)
    - `LOG_LEVEL=INFO`
-5. Деплой запустится автоматически
+   - для файлового контекста: `STORAGE_*` (см. DEPLOY_WEB.md)
+5. Проверка: `GET /health` возвращает 200
 
-### Переменные окружения Railway
+### Переменные окружения Railway (API)
 
 | Переменная | Описание |
 |------------|----------|
 | `OPENROUTER_API_KEY` | API ключ OpenRouter |
+| `DATABASE_URL` | URL БД (SQLite по умолчанию локально) |
 | `LLM_MODEL` | Модель по умолчанию |
 | `LOG_LEVEL` | Уровень логирования |
 

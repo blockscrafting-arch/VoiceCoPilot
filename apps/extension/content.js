@@ -2,6 +2,9 @@ function postToPage(payload) {
   window.postMessage(payload, "*");
 }
 
+// Notify page that extension is loaded (for getDisplayMedia fallback detection)
+postToPage({ source: "voicecopilot-extension", type: "ready" });
+
 window.addEventListener("message", (event) => {
   if (!event.data || event.data.source !== "voicecopilot-web") {
     return;

@@ -1,7 +1,7 @@
 /**
  * API client for communicating with the backend server.
+ * For production deploy set VITE_API_URL to the public API URL (see docs/DEPLOY_WEB.md).
  */
-
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const TOKEN_KEY = "voicecopilot_token";
 
