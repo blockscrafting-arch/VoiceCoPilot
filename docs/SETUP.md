@@ -119,6 +119,7 @@ pnpm test
 | `OPENROUTER_API_KEY` | API ключ OpenRouter |
 | `DATABASE_URL` | URL БД (локально SQLite; на Railway — Postgres, подставляется при добавлении сервиса) |
 | `LLM_MODEL` | Модель по умолчанию |
+| `STT_MODEL` | Модель Whisper: `tiny` (быстро, для веб‑демо), `base`, `small`, … |
 | `LOG_LEVEL` | Уровень логирования |
 
 ## Сборка desktop-приложения

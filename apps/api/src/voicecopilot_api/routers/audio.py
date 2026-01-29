@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from ..logging_config import get_logger
-from ..services.transcription import TranscriptionService
+from ..services.transcription import get_transcription_service
 from ..services.transcript_saver import save_transcript
 
 router = APIRouter()
@@ -40,7 +40,7 @@ async def audio_stream(websocket: WebSocket) -> None:
         "user": AudioStreamConfig(),
         "other": AudioStreamConfig(),
     }
-    transcription_service = TranscriptionService()
+    transcription_service = get_transcription_service()
     transcript_entries: list[dict[str, str]] = []
     active_project_id = "default"
 

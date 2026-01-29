@@ -16,7 +16,10 @@ export async function ensureConfigLoaded(): Promise<void> {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 5000);
-    const r = await fetch("/config.json", { signal: ctrl.signal });
+    const r = await fetch(`/config.json?v=${Date.now()}`, {
+      signal: ctrl.signal,
+      cache: "no-store",
+    });
     clearTimeout(t);
     if (r.ok) {
       const j = (await r.json()) as { apiUrl?: string };
@@ -132,7 +135,7 @@ export async function generateSuggestions(
  * Fetch all projects.
  */
 export async function fetchProjects(): Promise<Project[]> {
-  const response = await fetch(`${getApiBaseUrl()}/api/projects`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/projects/`, {
     headers: {
       ...authHeaders(),
     },
@@ -148,7 +151,7 @@ export async function fetchProjects(): Promise<Project[]> {
  * Create a new project.
  */
 export async function createProject(name: string): Promise<Project> {
-  const response = await fetch(`${getApiBaseUrl()}/api/projects`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/projects/`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

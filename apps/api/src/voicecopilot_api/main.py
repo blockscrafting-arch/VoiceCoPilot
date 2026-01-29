@@ -14,6 +14,7 @@ from .config import settings
 from .logging_config import get_logger, setup_logging
 from .routers import audio, context, health, projects, suggestions
 from .services.db import init_db
+from .services.transcription import get_transcription_service
 
 logger = get_logger(__name__)
 
@@ -58,6 +59,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         init_db()
     except Exception as exc:
         logger.exception("Database init failed; app will start but projects may fail", error=str(exc))
+    try:
+        get_transcription_service().ensure_model_loaded()
+    except Exception as exc:
+        logger.warning("STT warmup failed; first transcription will be slower", error=str(exc))
     ready_port = os.getenv("VOICECOPILOT_READY_PORT")
     if ready_port:
         try:

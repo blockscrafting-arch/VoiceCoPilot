@@ -8,6 +8,16 @@ from ..models.schemas import TranscriptionResult
 
 logger = get_logger(__name__)
 
+_default_service: Optional["TranscriptionService"] = None
+
+
+def get_transcription_service() -> "TranscriptionService":
+    """Return shared TranscriptionService instance (for warmup and WebSocket handlers)."""
+    global _default_service
+    if _default_service is None:
+        _default_service = TranscriptionService()
+    return _default_service
+
 
 class TranscriptionService:
     """Service for transcribing audio to text using Whisper.
@@ -57,6 +67,10 @@ class TranscriptionService:
         except Exception as e:
             logger.exception("Failed to load Whisper model", error=str(e))
             raise RuntimeError(f"Failed to load Whisper model: {e}")
+
+    def ensure_model_loaded(self) -> None:
+        """Public entry point for preloading the model at startup (e.g. in lifespan)."""
+        self._ensure_model_loaded()
 
     async def process_chunk(
         self,

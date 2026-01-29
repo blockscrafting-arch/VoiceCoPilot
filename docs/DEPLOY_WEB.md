@@ -7,6 +7,7 @@
 4) Укажи остальные переменные окружения:
    - `OPENROUTER_API_KEY`
    - `DATABASE_URL` (подставляется при добавлении Postgres)
+   - `STT_MODEL=tiny` — для веб‑демо рекомендуется (быстрее первая транскрибация, меньше задержка; качество ниже, чем у `base`).
    - `STORAGE_BUCKET`
    - `STORAGE_REGION`
    - `STORAGE_ENDPOINT_URL` (если не AWS)
