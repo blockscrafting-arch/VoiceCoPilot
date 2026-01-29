@@ -23,5 +23,5 @@ WORKDIR /app/apps/web
 ENV NODE_ENV=production
 ENV PORT=4173
 EXPOSE 4173
-# Railway overrides PORT at runtime. Default ensures serve never gets 0.0.0.0: (empty port).
-CMD ["sh", "-c", "serve -s dist -l 0.0.0.0:${PORT}"]
+# Railway sets PORT at runtime; fallback so empty PORT never yields 0.0.0.0:
+CMD ["sh", "-c", "serve -s dist -l 0.0.0.0:${PORT:-4173}"]
