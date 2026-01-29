@@ -42,5 +42,7 @@ apps/web/src-tauri/binaries/
 
 # Whisper models (large files)
 models/
+!apps/api/src/voicecopilot_api/models/
+!apps/api/src/voicecopilot_api/models/**
 *.bin
 *.pt
