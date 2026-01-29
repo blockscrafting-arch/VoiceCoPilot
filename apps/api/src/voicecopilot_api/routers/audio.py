@@ -48,6 +48,9 @@ async def audio_stream(websocket: WebSocket) -> None:
         while True:
             message = await websocket.receive()
 
+            if message.get("type") == "websocket.disconnect":
+                break
+
             # Handle config messages (text)
             if message.get("text"):
                 try:
@@ -137,7 +140,11 @@ async def audio_stream(websocket: WebSocket) -> None:
         logger.info("Audio stream disconnected", client_id=client_id)
     except Exception as e:
         logger.exception("Error in audio stream", client_id=client_id, error=str(e))
-        await websocket.close(code=1011, reason="Internal error")
+        try:
+            await websocket.close(code=1011, reason="Internal error")
+        except RuntimeError:
+            # Connection already closed (e.g. disconnect received); ignore
+            pass
     finally:
         try:
             save_transcript(active_project_id, transcript_entries)
