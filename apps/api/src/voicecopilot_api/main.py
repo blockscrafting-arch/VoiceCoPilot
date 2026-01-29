@@ -53,7 +53,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     setup_logging()
     logger.info("VoiceCoPilot API starting", version="0.1.0")
-    init_db()
+    try:
+        init_db()
+    except Exception as exc:
+        logger.exception("Database init failed; app will start but projects may fail", error=str(exc))
     ready_port = os.getenv("VOICECOPILOT_READY_PORT")
     if ready_port:
         try:

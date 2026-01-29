@@ -12,8 +12,10 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
+# Copy source code and entrypoint
 COPY src/ ./src/
+COPY docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
 
 # Set Python path
 ENV PYTHONPATH=/app/src
@@ -22,5 +24,4 @@ ENV PYTHONUNBUFFERED=1
 # Railway injects PORT at runtime; default 8000 for local runs
 EXPOSE 8000
 
-# Run the API server (use $PORT so Railway healthcheck and proxy match)
-CMD ["sh", "-c", "exec uvicorn voicecopilot_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
