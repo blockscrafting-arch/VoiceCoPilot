@@ -104,12 +104,15 @@ export interface Project {
  *
  * @param history - Recent conversation messages
  * @param context - Additional context
+ * @param projectId - Optional project id
+ * @param signal - Optional AbortSignal to cancel the request
  * @returns Array of suggested responses
  */
 export async function generateSuggestions(
   history: Message[],
   context: string = "",
-  projectId?: string
+  projectId?: string,
+  signal?: AbortSignal
 ): Promise<string[]> {
   // #region agent log
   if (import.meta.env.DEV) fetch('http://127.0.0.1:7246/ingest/b61f59fc-c1a9-4f8c-ae0e-5d177a7f7853',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:25',message:'suggestions_fetch_start',data:{baseUrl:getApiBaseUrl(),projectId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
@@ -121,6 +124,7 @@ export async function generateSuggestions(
       ...authHeaders(),
     },
     body: JSON.stringify({ history, context, project_id: projectId }),
+    signal,
   });
 
   if (!response.ok) {

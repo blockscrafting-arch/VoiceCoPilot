@@ -120,7 +120,8 @@ pnpm test
 | `DATABASE_URL` | URL БД (локально SQLite; на Railway — Postgres, подставляется при добавлении сервиса) |
 | `LLM_MODEL` | Модель по умолчанию |
 | `STT_PROVIDER` | `local` (faster-whisper) или `openai` (Whisper API) |
-| `STT_MODEL` | Модель Whisper при local: `tiny`, `base`, `small`, … |
+| `STT_MODEL` | Модель Whisper **только при STT_PROVIDER=local**: `tiny`, `base`, `small`, … |
+| `STT_DEVICE` | **Только при STT_PROVIDER=local**: `cpu` или `cuda` |
 | `OPENAI_API_KEY` | Ключ OpenAI при STT_PROVIDER=openai |
 | `OPENAI_STT_MODEL` | Модель OpenAI STT (например `whisper-1`) |
 | `STT_CHUNK_SECONDS` | Длина буфера аудио в сек (для openai, напр. 2.0) |
@@ -152,7 +153,7 @@ choco install ffmpeg
 ```
 
 ### Транскрипция пустая на Railway
-Если используете `STT_PROVIDER=openai`, в Railway Variables обязательно задайте `OPENAI_API_KEY` (ключ OpenAI). Без него транскрипция возвращает пустой текст и в логах при старте будет предупреждение.
+Если используете `STT_PROVIDER=openai`, в Railway Variables обязательно задайте `OPENAI_API_KEY` (ключ OpenAI). Без него транскрипция возвращает пустой текст и в логах при старте будет предупреждение. При `STT_PROVIDER=openai` переменные `STT_MODEL` и `STT_DEVICE` не используются — STT идёт через API OpenAI.
 
 ### Ошибка CUDA
 Если нет GPU, используйте CPU:

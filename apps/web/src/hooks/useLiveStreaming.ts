@@ -27,6 +27,11 @@ export function useLiveStreaming() {
 
   const wsRef = useRef<AudioWebSocket | null>(null);
   const debounceRef = useRef<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const lastTranscriptRef = useRef<{ user: string; other: string }>({
+    user: "",
+    other: "",
+  });
 
   const { startCapture, stopCapture, error } = useAudioCapture(
     (chunk, speaker) => {
@@ -63,10 +68,16 @@ export function useLiveStreaming() {
 
     ws.connect({
       onTranscript: (text, speaker) => {
-        if (!text.trim()) {
+        const t = text.trim();
+        if (!t) {
           return;
         }
         const role = speaker === "user" ? "user" : "other";
+        const key = role === "user" ? "user" : "other";
+        if (lastTranscriptRef.current[key] === t) {
+          return;
+        }
+        lastTranscriptRef.current[key] = t;
         addMessage(role, text);
       },
       onOpen: () => setConnected(true),

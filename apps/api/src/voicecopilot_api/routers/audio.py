@@ -3,6 +3,7 @@
 import base64
 import json
 import math
+import re
 import time
 from array import array
 from dataclasses import dataclass
@@ -23,6 +24,34 @@ class AudioStreamConfig:
 
     sample_rate: int = 16000
     channels: int = 1
+
+
+# Subtitle/credits pattern: skip sending repeated credits text to client
+CREDITS_PATTERN = re.compile(
+    r"редактор\s+субтитров|корректор\s+[а-яёa-z]",
+    re.IGNORECASE,
+)
+
+
+def _normalize_text(text: str) -> str:
+    """Normalize text for duplicate check (strip, collapse spaces)."""
+    return " ".join(text.strip().split())
+
+
+def _should_skip_transcription(
+    text: str,
+    speaker: str,
+    last_sent: dict[str, str],
+) -> bool:
+    """Return True if we should not send this transcription (credits or duplicate)."""
+    if not text or not text.strip():
+        return True
+    normalized = _normalize_text(text)
+    if CREDITS_PATTERN.search(normalized):
+        return True
+    if last_sent.get(speaker) == normalized:
+        return True
+    return False
 
 
 def _estimate_rms(pcm_bytes: bytes, max_samples: int = 2000) -> float:
@@ -70,6 +99,7 @@ async def audio_stream(websocket: WebSocket) -> None:
     transcription_service = get_transcription_service()
     transcript_entries: list[dict[str, str]] = []
     active_project_id = "default"
+    last_sent_text: dict[str, str] = {}
     stats = {
         "user": {"bytes": 0, "chunks": 0, "last_log": time.monotonic()},
         "other": {"bytes": 0, "chunks": 0, "last_log": time.monotonic()},
@@ -169,6 +199,11 @@ async def audio_stream(websocket: WebSocket) -> None:
                     )
 
                     if result.text:
+                        if _should_skip_transcription(
+                            result.text, result.speaker, last_sent_text
+                        ):
+                            continue
+                        last_sent_text[result.speaker] = _normalize_text(result.text)
                         transcript_entries.append({
                             "timestamp": "",
                             "speaker": result.speaker,
@@ -204,6 +239,11 @@ async def audio_stream(websocket: WebSocket) -> None:
             )
 
             if result.text:
+                if _should_skip_transcription(
+                    result.text, result.speaker, last_sent_text
+                ):
+                    continue
+                last_sent_text[result.speaker] = _normalize_text(result.text)
                 transcript_entries.append({
                     "timestamp": "",
                     "speaker": result.speaker,
