@@ -104,19 +104,20 @@ pnpm test
 1. Создайте проект на [railway.app](https://railway.app)
 2. Подключите GitHub репозиторий
 3. Соберите из `apps/api` (Dockerfile или Nixpacks)
-4. Добавьте переменные окружения:
+4. Добавьте сервис Postgres в проект (Railway подставит `DATABASE_URL`); драйвер `psycopg2-binary` в `requirements.txt`.
+5. Добавьте переменные окружения:
    - `OPENROUTER_API_KEY` (обязательно)
-   - `DATABASE_URL` (если используется БД для проектов)
+   - `DATABASE_URL` (подставляется при добавлении Postgres)
    - `LOG_LEVEL=INFO`
    - для файлового контекста: `STORAGE_*` (см. DEPLOY_WEB.md)
-5. Проверка: `GET /health` возвращает 200
+6. Сгенерируйте домен для API (Settings → Networking → Generate Domain). Проверка: `GET https://<ваш-api>.up.railway.app/health` возвращает 200.
 
 ### Переменные окружения Railway (API)
 
 | Переменная | Описание |
 |------------|----------|
 | `OPENROUTER_API_KEY` | API ключ OpenRouter |
-| `DATABASE_URL` | URL БД (SQLite по умолчанию локально) |
+| `DATABASE_URL` | URL БД (локально SQLite; на Railway — Postgres, подставляется при добавлении сервиса) |
 | `LLM_MODEL` | Модель по умолчанию |
 | `LOG_LEVEL` | Уровень логирования |
 

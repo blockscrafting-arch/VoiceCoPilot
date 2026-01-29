@@ -21,7 +21,12 @@ export async function ensureConfigLoaded(): Promise<void> {
     if (r.ok) {
       const j = (await r.json()) as { apiUrl?: string };
       if (j?.apiUrl && typeof j.apiUrl === "string") {
-        _apiBaseUrl = j.apiUrl.replace(/\/$/, "");
+        let url = j.apiUrl.replace(/\/$/, "");
+        // Avoid mixed content: if page is HTTPS, use HTTPS for API
+        if (typeof window !== "undefined" && window.location?.protocol === "https:" && url.startsWith("http://")) {
+          url = url.replace(/^http:\/\//i, "https://");
+        }
+        _apiBaseUrl = url;
       }
     }
   } catch {

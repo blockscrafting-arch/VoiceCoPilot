@@ -17,22 +17,23 @@ from .services.db import init_db
 
 logger = get_logger(__name__)
 
-DEBUG_LOG_PATH = r"d:\vladexecute\proj\VoiceCoPilot\.cursor\debug.log"
-
-
 def _debug_log(hypothesis_id: str, message: str, data: dict) -> None:
+    """Write debug payload to file only when VOICECOPILOT_DEBUG_LOG is set (e.g. local path)."""
+    debug_path = os.getenv("VOICECOPILOT_DEBUG_LOG")
+    if not debug_path:
+        return
     payload = {
         "sessionId": "debug-session",
         "runId": "run1",
         "hypothesisId": hypothesis_id,
-        "location": "main.py:24",
+        "location": "main.py",
         "message": message,
         "data": data,
         "timestamp": int(__import__("time").time() * 1000),
     }
     try:
-        Path(DEBUG_LOG_PATH).parent.mkdir(parents=True, exist_ok=True)
-        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as handle:
+        Path(debug_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(debug_path, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
     except Exception:
         pass

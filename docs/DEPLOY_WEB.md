@@ -3,23 +3,24 @@
 ### Backend (Railway)
 1) Создай новый проект на Railway.
 2) Выбери папку `apps/api`.
-3) Укажи переменные окружения:
+3) Добавь сервис **Postgres** (Railway подставит `DATABASE_URL`). Драйвер `psycopg2-binary` уже в `requirements.txt`.
+4) Укажи остальные переменные окружения:
    - `OPENROUTER_API_KEY`
-   - `DATABASE_URL`
+   - `DATABASE_URL` (подставляется при добавлении Postgres)
    - `STORAGE_BUCKET`
    - `STORAGE_REGION`
    - `STORAGE_ENDPOINT_URL` (если не AWS)
    - `STORAGE_ACCESS_KEY`
    - `STORAGE_SECRET_KEY`
    - `STORAGE_PUBLIC_BASE_URL` (если нужен публичный URL файлов)
-4) Проверка: `/health` возвращает 200.
+5) Проверка: сгенерируй домен для API (Settings → Networking → Generate Domain), затем `GET https://<твой-api>.up.railway.app/health` возвращает 200.
 
 ### Frontend
 
 **Без URL бэкенда проекты, транскрипция и подсказки не работают** — UI будет загружаться, но запросы уйдут на localhost и вернут ошибку.
 
 **Вариант A: Frontend на Railway (Docker)**  
-В настройках сервиса web задай переменную окружения **`API_URL`** = публичный URL API без слэша в конце (например `https://<твой-api>.up.railway.app`). При старте контейнера из неё генерируется `dist/config.json`; фронт запрашивает `/config.json` и подставляет этот URL для REST и WebSocket. Пересборка при смене URL не нужна.
+В настройках сервиса web задай переменную окружения **`API_URL`** = публичный URL API **по HTTPS** и без слэша в конце (например `https://<твой-api>.up.railway.app`). Иначе браузер заблокирует запросы (mixed content: страница по HTTPS, API по HTTP). При старте контейнера из `API_URL` генерируется `dist/config.json`; фронт запрашивает `/config.json` и подставляет этот URL для REST и WebSocket. Если в конфиге указан `http://`, фронт при открытой по HTTPS странице автоматически подменяет на `https://`. Пересборка при смене URL не нужна.
 
 **Вариант B: Frontend на Vercel**  
 В настройках проекта укажи **`VITE_API_URL`** = URL API (см. выше). Vite подставит его при сборке. Проверка: UI открывается, запросы уходят на API.
