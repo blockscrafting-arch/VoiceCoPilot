@@ -1,0 +1,2 @@
+# Shell scripts: always LF in repo and on checkout (avoids Docker ENTRYPOINT failures on Windows)
+*.sh text eol=lf
