@@ -7,6 +7,6 @@ if [ -z "$PORT_VALUE" ]; then
 fi
 
 echo "[entrypoint] PORT=${PORT-<unset>}"
-echo "[entrypoint] vite preview --host 0.0.0.0 --port ${PORT_VALUE}"
+echo "[entrypoint] serve -s dist -l ${PORT_VALUE}"
 
-exec node_modules/.bin/vite preview --host 0.0.0.0 --port "$PORT_VALUE"
+exec serve -s dist -l "$PORT_VALUE"

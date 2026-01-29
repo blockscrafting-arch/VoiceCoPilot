@@ -24,5 +24,6 @@ RUN chmod +x /app/apps/web/docker-entrypoint.sh
 ENV NODE_ENV=production
 ENV PORT=4173
 EXPOSE 4173
-# Debug: log PORT and always start serve from entrypoint
+HEALTHCHECK --interval=5s --timeout=2s --start-period=10s --retries=2 \
+  CMD wget -q -O - "http://127.0.0.1:${PORT:-4173}/" || exit 1
 ENTRYPOINT ["/app/apps/web/docker-entrypoint.sh"]

@@ -35,7 +35,7 @@ export function ProjectSelector() {
     const setupListener = async () => {
       unlisten = await listen("sidecar-ready", () => {
         // #region agent log
-        fetch('http://127.0.0.1:7246/ingest/b61f59fc-c1a9-4f8c-ae0e-5d177a7f7853',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProjectSelector.tsx:20',message:'sidecar_ready_event',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H5'})}).catch(()=>{});
+        if (import.meta.env.DEV) fetch('http://127.0.0.1:7246/ingest/b61f59fc-c1a9-4f8c-ae0e-5d177a7f7853',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProjectSelector.tsx:20',message:'sidecar_ready_event',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H5'})}).catch(()=>{});
         // #endregion
         void loadProjects();
       });
