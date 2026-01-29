@@ -2,6 +2,9 @@
 
 import base64
 import json
+import math
+import time
+from array import array
 from dataclasses import dataclass
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -20,6 +23,30 @@ class AudioStreamConfig:
 
     sample_rate: int = 16000
     channels: int = 1
+
+
+def _estimate_rms(pcm_bytes: bytes, max_samples: int = 2000) -> float:
+    """Estimate RMS amplitude from PCM16 bytes.
+
+    Args:
+        pcm_bytes: Raw PCM16 bytes.
+        max_samples: Maximum number of samples to inspect.
+
+    Returns:
+        RMS amplitude (0..32767 for 16-bit PCM).
+    """
+    if not pcm_bytes:
+        return 0.0
+    byte_len = len(pcm_bytes) - (len(pcm_bytes) % 2)
+    if byte_len <= 0:
+        return 0.0
+    sample_bytes = pcm_bytes[: min(byte_len, max_samples * 2)]
+    samples = array("h")
+    samples.frombytes(sample_bytes)
+    if not samples:
+        return 0.0
+    power = sum(sample * sample for sample in samples) / len(samples)
+    return math.sqrt(power)
 
 
 @router.websocket("/stream")
@@ -43,6 +70,45 @@ async def audio_stream(websocket: WebSocket) -> None:
     transcription_service = get_transcription_service()
     transcript_entries: list[dict[str, str]] = []
     active_project_id = "default"
+    stats = {
+        "user": {"bytes": 0, "chunks": 0, "last_log": time.monotonic()},
+        "other": {"bytes": 0, "chunks": 0, "last_log": time.monotonic()},
+    }
+
+    def log_audio_stats(
+        speaker: str,
+        chunk_bytes: bytes,
+        sample_rate: int,
+        channels: int,
+    ) -> None:
+        if not chunk_bytes:
+            return
+        state = stats.setdefault(
+            speaker,
+            {"bytes": 0, "chunks": 0, "last_log": time.monotonic()},
+        )
+        state["bytes"] += len(chunk_bytes)
+        state["chunks"] += 1
+        now = time.monotonic()
+        elapsed = now - state["last_log"]
+        if elapsed < 5:
+            return
+        bytes_per_sec = state["bytes"] / max(elapsed, 0.001)
+        avg_chunk = state["bytes"] / max(state["chunks"], 1)
+        rms = _estimate_rms(chunk_bytes)
+        logger.info(
+            "Audio stream stats",
+            client_id=client_id,
+            speaker=speaker,
+            sample_rate=sample_rate,
+            channels=channels,
+            bytes_per_sec=round(bytes_per_sec, 2),
+            avg_chunk_bytes=round(avg_chunk, 2),
+            rms=round(rms, 2),
+        )
+        state["bytes"] = 0
+        state["chunks"] = 0
+        state["last_log"] = now
 
     try:
         while True:
@@ -60,6 +126,7 @@ async def audio_stream(websocket: WebSocket) -> None:
 
                 if payload.get("type") == "config":
                     speaker = payload.get("speaker") or "user"
+                    source = payload.get("source")
                     config = stream_configs.get(speaker) or AudioStreamConfig()
                     config.sample_rate = int(payload.get("sample_rate") or 16000)
                     config.channels = int(payload.get("channels") or 1)
@@ -70,6 +137,7 @@ async def audio_stream(websocket: WebSocket) -> None:
                         "Audio config received",
                         client_id=client_id,
                         speaker=speaker,
+                        source=source,
                         sample_rate=config.sample_rate,
                         channels=config.channels,
                     )
@@ -92,6 +160,12 @@ async def audio_stream(websocket: WebSocket) -> None:
                         sample_rate=config.sample_rate,
                         channels=config.channels,
                         speaker=speaker,
+                    )
+                    log_audio_stats(
+                        speaker,
+                        audio_bytes,
+                        config.sample_rate,
+                        config.channels,
                     )
 
                     if result.text:
@@ -121,6 +195,12 @@ async def audio_stream(websocket: WebSocket) -> None:
                 sample_rate=stream_configs["other"].sample_rate,
                 channels=stream_configs["other"].channels,
                 speaker="other",
+            )
+            log_audio_stats(
+                "other",
+                data,
+                stream_configs["other"].sample_rate,
+                stream_configs["other"].channels,
             )
 
             if result.text:

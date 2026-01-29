@@ -48,6 +48,7 @@ export function useLiveStreaming() {
         sampleRate: config.sample_rate,
         channels: config.channels,
         projectId: currentProjectId ?? "default",
+        source: config.source,
       });
     }
   );
@@ -87,6 +88,7 @@ export function useLiveStreaming() {
         sampleRate: config.sample_rate,
         channels: config.channels,
         projectId: currentProjectId ?? "default",
+        source: config.source,
       });
     });
     setRecording(true);

@@ -26,6 +26,8 @@ interface AudioStreamConfig {
   channels: number;
   /** Speaker label */
   speaker: Speaker;
+  /** Capture source */
+  source?: "mic" | "extension" | "display";
 }
 
 interface AudioChunkPayload {
@@ -81,13 +83,21 @@ export function useAudioCapture(
       const configs: AudioStreamConfig[] = [];
 
       // Microphone capture via Web Audio API
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
       micStreamRef.current = stream;
       const audioContext = new AudioContext();
       audioContextRef.current = audioContext;
       const source = audioContext.createMediaStreamSource(stream);
       const processor = audioContext.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
+      const silentGain = audioContext.createGain();
+      silentGain.gain.value = 0;
 
       processor.onaudioprocess = (event) => {
         const input = event.inputBuffer.getChannelData(0);
@@ -102,13 +112,15 @@ export function useAudioCapture(
       };
 
       source.connect(processor);
-      processor.connect(audioContext.destination);
+      processor.connect(silentGain);
+      silentGain.connect(audioContext.destination);
 
       if (!micConfigSent.current && onConfig) {
         const micConfig = {
           sample_rate: audioContext.sampleRate,
           channels: 1,
           speaker: "user" as const,
+          source: "mic" as const,
         };
         onConfig(micConfig);
         configs.push(micConfig);
@@ -133,11 +145,13 @@ export function useAudioCapture(
                 sample_rate: payload.sampleRate,
                 channels: payload.channels,
                 speaker: "other",
+                source: "extension",
               });
               configs.push({
                 sample_rate: payload.sampleRate,
                 channels: payload.channels,
                 speaker: "other",
+                source: "extension",
               });
               extensionConfigSent.current = true;
             }
@@ -179,6 +193,8 @@ export function useAudioCapture(
         const displaySource = displayCtx.createMediaStreamSource(displayStream);
         const displayProcessor = displayCtx.createScriptProcessor(4096, 2, 1);
         displayProcessorRef.current = displayProcessor;
+        const displaySilentGain = displayCtx.createGain();
+        displaySilentGain.gain.value = 0;
         displayProcessor.onaudioprocess = (event) => {
           const input = event.inputBuffer.getChannelData(0);
           const ch1 = event.inputBuffer.numberOfChannels > 1 ? event.inputBuffer.getChannelData(1) : null;
@@ -194,12 +210,14 @@ export function useAudioCapture(
           }
         };
         displaySource.connect(displayProcessor);
-        displayProcessor.connect(displayCtx.destination);
+        displayProcessor.connect(displaySilentGain);
+        displaySilentGain.connect(displayCtx.destination);
         if (!displayConfigSent.current && onConfig) {
           const otherConfig = {
             sample_rate: displayCtx.sampleRate,
             channels: 1,
             speaker: "other" as const,
+            source: "display" as const,
           };
           onConfig(otherConfig);
           configs.push(otherConfig);

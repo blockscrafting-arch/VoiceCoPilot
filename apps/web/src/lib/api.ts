@@ -241,7 +241,7 @@ export class AudioWebSocket {
    */
   private streamConfigs: Record<
     string,
-    { sampleRate: number; channels: number }
+    { sampleRate: number; channels: number; source?: string }
   > = {};
 
   /**
@@ -336,10 +336,12 @@ export class AudioWebSocket {
     sampleRate: number;
     channels: number;
     projectId?: string;
+    source?: string;
   }): void {
     this.streamConfigs[config.speaker] = {
       sampleRate: config.sampleRate,
       channels: config.channels,
+      source: config.source,
     };
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(
@@ -349,6 +351,7 @@ export class AudioWebSocket {
           project_id: config.projectId,
           sample_rate: config.sampleRate,
           channels: config.channels,
+          source: config.source,
         })
       );
     }
