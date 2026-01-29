@@ -7,6 +7,6 @@ if [ -z "$PORT_VALUE" ]; then
 fi
 
 echo "[entrypoint] PORT=${PORT-<unset>}"
-echo "[entrypoint] serve -s dist -l ${PORT_VALUE}"
+echo "[entrypoint] serve -s dist -l tcp://0.0.0.0:${PORT_VALUE}"
 
-exec serve -s dist -l "$PORT_VALUE"
+exec serve -s dist -l "tcp://0.0.0.0:${PORT_VALUE}"
