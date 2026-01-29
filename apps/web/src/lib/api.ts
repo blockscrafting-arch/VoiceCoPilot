@@ -1,8 +1,53 @@
 /**
  * API client for communicating with the backend server.
- * For production deploy set VITE_API_URL to the public API URL (see docs/DEPLOY_WEB.md).
+ * In production, API URL can be set at runtime via /config.json (generated from API_URL env in container).
+ * In dev, use VITE_API_URL or default to http://127.0.0.1:8000. See docs/DEPLOY_WEB.md.
  */
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const DEFAULT_API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+let _apiBaseUrl = DEFAULT_API_BASE_URL;
+let _configLoaded = false;
+
+/**
+ * Load runtime config from /config.json (production). Call before first API use.
+ */
+export async function ensureConfigLoaded(): Promise<void> {
+  if (_configLoaded) return;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5000);
+    const r = await fetch("/config.json", { signal: ctrl.signal });
+    clearTimeout(t);
+    if (r.ok) {
+      const j = (await r.json()) as { apiUrl?: string };
+      if (j?.apiUrl && typeof j.apiUrl === "string") {
+        _apiBaseUrl = j.apiUrl.replace(/\/$/, "");
+      }
+    }
+  } catch {
+    // No config, 404, timeout or network: keep default
+  }
+  _configLoaded = true;
+}
+
+function getApiBaseUrl(): string {
+  return _apiBaseUrl;
+}
+
+/**
+ * True if we're on a non-localhost origin but API URL is still localhost (config.json missing or API_URL not set).
+ */
+export function isProductionWithoutApiConfig(): boolean {
+  if (typeof window === "undefined") return false;
+  const origin = window.location.origin;
+  const isLocal =
+    origin.startsWith("http://127.0.0.1") || origin.startsWith("http://localhost");
+  const apiIsLocal =
+    _apiBaseUrl.startsWith("http://127.0.0.1") ||
+    _apiBaseUrl.startsWith("http://localhost");
+  return !isLocal && apiIsLocal;
+}
+
 const TOKEN_KEY = "voicecopilot_token";
 
 function getToken(): string {
@@ -59,9 +104,9 @@ export async function generateSuggestions(
   projectId?: string
 ): Promise<string[]> {
   // #region agent log
-  if (import.meta.env.DEV) fetch('http://127.0.0.1:7246/ingest/b61f59fc-c1a9-4f8c-ae0e-5d177a7f7853',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:25',message:'suggestions_fetch_start',data:{baseUrl:API_BASE_URL,projectId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
+  if (import.meta.env.DEV) fetch('http://127.0.0.1:7246/ingest/b61f59fc-c1a9-4f8c-ae0e-5d177a7f7853',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:25',message:'suggestions_fetch_start',data:{baseUrl:getApiBaseUrl(),projectId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
   // #endregion
-  const response = await fetch(`${API_BASE_URL}/api/suggestions/generate`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/suggestions/generate`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -82,7 +127,7 @@ export async function generateSuggestions(
  * Fetch all projects.
  */
 export async function fetchProjects(): Promise<Project[]> {
-  const response = await fetch(`${API_BASE_URL}/api/projects`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/projects`, {
     headers: {
       ...authHeaders(),
     },
@@ -98,7 +143,7 @@ export async function fetchProjects(): Promise<Project[]> {
  * Create a new project.
  */
 export async function createProject(name: string): Promise<Project> {
-  const response = await fetch(`${API_BASE_URL}/api/projects`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/projects`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -119,7 +164,7 @@ export async function updateProject(
   projectId: string,
   payload: Partial<Pick<Project, "name" | "context_text" | "llm_model">>
 ): Promise<Project> {
-  const response = await fetch(`${API_BASE_URL}/api/projects/${projectId}`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(payload),
@@ -134,7 +179,7 @@ export async function updateProject(
  * Fetch a single project by id.
  */
 export async function getProject(projectId: string): Promise<Project> {
-  const response = await fetch(`${API_BASE_URL}/api/projects/${projectId}`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}`, {
     headers: {
       ...authHeaders(),
     },
@@ -158,7 +203,7 @@ export async function uploadContextFile(
   formData.append("mode", mode);
 
   const response = await fetch(
-    `${API_BASE_URL}/api/projects/${projectId}/context/files`,
+    `${getApiBaseUrl()}/api/projects/${projectId}/context/files`,
     {
       method: "POST",
       headers: {
@@ -216,7 +261,7 @@ export class AudioWebSocket {
     onClose?: () => void;
     onError?: (error: Event) => void;
   }): void {
-    const wsUrl = API_BASE_URL.replace("http", "ws");
+    const wsUrl = getApiBaseUrl().replace(/^http/, "ws");
     this.ws = new WebSocket(`${wsUrl}/api/audio/stream`);
     this.onTranscript = handlers.onTranscript;
     this.onOpen = handlers.onOpen ?? null;

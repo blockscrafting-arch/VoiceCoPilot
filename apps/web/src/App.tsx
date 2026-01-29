@@ -4,6 +4,7 @@ import { SuggestionsPanel } from "./components/SuggestionsPanel";
 import { Controls } from "./components/Controls";
 import { ProjectSelector } from "./components/ProjectSelector";
 import { ContextPanel } from "./components/ContextPanel";
+import { isProductionWithoutApiConfig } from "./lib/api";
 import { useAppStore } from "./stores/appStore";
 import { useLiveStreaming } from "./hooks/useLiveStreaming";
 
@@ -14,10 +15,17 @@ import { useLiveStreaming } from "./hooks/useLiveStreaming";
 function App() {
   const { isRecording } = useAppStore();
   const { startStreaming, stopStreaming, error } = useLiveStreaming();
+  const showApiConfigBanner = isProductionWithoutApiConfig();
 
   return (
     <div className="h-screen flex flex-col bg-gray-900">
       <Header />
+
+      {showApiConfigBanner && (
+        <div className="bg-amber-900/80 text-amber-200 text-sm px-4 py-2 border-b border-amber-700">
+          API не настроен. Задайте переменную окружения <strong>API_URL</strong> в настройках веб-сервиса Railway (URL вашего API, например https://ваш-api.up.railway.app). Без этого проекты, транскрипция и подсказки не работают. См. docs/DEPLOY_WEB.md.
+        </div>
+      )}
 
       <main className="flex-1 flex flex-col overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-700 bg-gray-800">
