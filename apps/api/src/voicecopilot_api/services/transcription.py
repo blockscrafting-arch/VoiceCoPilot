@@ -1,5 +1,7 @@
-"""Speech-to-text transcription service using faster-whisper."""
+"""Speech-to-text transcription service (faster-whisper local or OpenAI Whisper API)."""
 
+import io
+import wave
 from typing import Optional
 
 from ..config import settings
@@ -69,8 +71,42 @@ class TranscriptionService:
             raise RuntimeError(f"Failed to load Whisper model: {e}")
 
     def ensure_model_loaded(self) -> None:
-        """Public entry point for preloading the model at startup (e.g. in lifespan)."""
+        """Public entry point for preloading the model at startup (e.g. in lifespan). Only for local STT."""
+        if settings.stt_provider != "local":
+            return
         self._ensure_model_loaded()
+
+    def _pcm16_to_wav(self, pcm_bytes: bytes, sample_rate: int, channels: int) -> io.BytesIO:
+        """Build a WAV file in memory from PCM16 bytes."""
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as wav:
+            wav.setnchannels(channels)
+            wav.setsampwidth(2)
+            wav.setframerate(sample_rate)
+            wav.writeframes(pcm_bytes)
+        buf.seek(0)
+        buf.name = "audio.wav"
+        return buf
+
+    async def _transcribe_openai(self, pcm_bytes: bytes, sample_rate: int, channels: int) -> str:
+        """Send PCM audio to OpenAI Whisper API; return transcribed text."""
+        if not settings.openai_api_key:
+            logger.warning("OpenAI API key not set; skipping transcription")
+            return ""
+        wav_io = self._pcm16_to_wav(pcm_bytes, sample_rate, channels)
+        try:
+            from openai import OpenAI
+
+            client = OpenAI(api_key=settings.openai_api_key)
+            response = client.audio.transcriptions.create(
+                model=settings.openai_stt_model,
+                file=wav_io,
+                language="ru",
+            )
+            return (response.text or "").strip()
+        except Exception as e:
+            logger.exception("OpenAI transcription error", error=str(e))
+            return ""
 
     async def process_chunk(
         self,
@@ -82,6 +118,7 @@ class TranscriptionService:
         """Process an audio chunk and return transcription.
 
         Buffers audio data and transcribes when enough is accumulated.
+        Uses OpenAI Whisper API when stt_provider=openai, else local faster-whisper.
 
         Args:
             audio_data: Raw audio bytes (16-bit PCM).
@@ -92,8 +129,6 @@ class TranscriptionService:
         Returns:
             Transcription result with text and metadata.
         """
-        self._ensure_model_loaded()
-
         # Reset buffer if audio configuration changes per speaker
         if self._stream_configs.get(speaker) != (sample_rate, channels):
             self._buffers[speaker] = b""
@@ -102,46 +137,38 @@ class TranscriptionService:
         # Add to buffer
         self._buffers[speaker] = self._buffers.get(speaker, b"") + audio_data
 
-        # Check if we have enough audio (~1 second)
-        min_buffer_size = sample_rate * channels * 2
-        if len(self._buffers[speaker]) < min_buffer_size:
-            return TranscriptionResult()
+        chunk_seconds = getattr(settings, "stt_chunk_seconds", 2.0)
+        min_buffer_size = int(sample_rate * channels * 2 * chunk_seconds)
 
-        try:
-            # Convert bytes to numpy array
-            import numpy as np
-
-            audio_array = np.frombuffer(self._buffers[speaker], dtype=np.int16)
-
-            # Downmix to mono if needed
-            if channels > 1:
-                sample_count = (audio_array.size // channels) * channels
-                audio_array = audio_array[:sample_count].reshape(-1, channels)
-                audio_array = audio_array.mean(axis=1)
-
-            audio_array = audio_array.astype(np.float32) / 32768.0
-
-            # Resample to 16kHz if necessary
-            if sample_rate != 16000:
-                audio_array = self._resample_audio(audio_array, sample_rate, 16000)
-
-            segments = self._transcribe(audio_array)
-
-            # Collect text from segments
-            text = " ".join(segment.text.strip() for segment in segments)
-
-            # Clear buffer after successful transcription
+        if settings.stt_provider == "openai":
+            if len(self._buffers[speaker]) < min_buffer_size:
+                return TranscriptionResult()
+            pcm = self._buffers[speaker]
             self._buffers[speaker] = b""
+            text = await self._transcribe_openai(pcm, sample_rate, channels)
+            return TranscriptionResult(text=text, is_final=True, speaker=speaker)
+        else:
+            self._ensure_model_loaded()
+            if len(self._buffers[speaker]) < sample_rate * channels * 2:
+                return TranscriptionResult()
+            try:
+                import numpy as np
 
-            return TranscriptionResult(
-                text=text,
-                is_final=True,
-                speaker=speaker,
-            )
-
-        except Exception as e:
-            logger.exception("Transcription error", error=str(e))
-            return TranscriptionResult()
+                audio_array = np.frombuffer(self._buffers[speaker], dtype=np.int16)
+                if channels > 1:
+                    sample_count = (audio_array.size // channels) * channels
+                    audio_array = audio_array[:sample_count].reshape(-1, channels)
+                    audio_array = audio_array.mean(axis=1)
+                audio_array = audio_array.astype(np.float32) / 32768.0
+                if sample_rate != 16000:
+                    audio_array = self._resample_audio(audio_array, sample_rate, 16000)
+                segments = self._transcribe(audio_array)
+                text = " ".join(segment.text.strip() for segment in segments)
+                self._buffers[speaker] = b""
+                return TranscriptionResult(text=text, is_final=True, speaker=speaker)
+            except Exception as e:
+                logger.exception("Transcription error", error=str(e))
+                return TranscriptionResult()
 
     def _transcribe(self, audio_array: "np.ndarray") -> list[object]:
         """Run Whisper transcription with VAD fallback.

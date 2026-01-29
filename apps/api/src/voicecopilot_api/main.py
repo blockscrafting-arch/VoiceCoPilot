@@ -59,10 +59,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         init_db()
     except Exception as exc:
         logger.exception("Database init failed; app will start but projects may fail", error=str(exc))
-    try:
-        get_transcription_service().ensure_model_loaded()
-    except Exception as exc:
-        logger.warning("STT warmup failed; first transcription will be slower", error=str(exc))
+    if settings.stt_provider == "local":
+        try:
+            get_transcription_service().ensure_model_loaded()
+        except Exception as exc:
+            logger.warning("STT warmup failed; first transcription will be slower", error=str(exc))
     ready_port = os.getenv("VOICECOPILOT_READY_PORT")
     if ready_port:
         try:

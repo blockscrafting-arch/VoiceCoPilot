@@ -7,7 +7,7 @@
 4) Укажи остальные переменные окружения:
    - `OPENROUTER_API_KEY`
    - `DATABASE_URL` (подставляется при добавлении Postgres)
-   - `STT_MODEL=tiny` — для веб‑демо рекомендуется (быстрее первая транскрибация, меньше задержка; качество ниже, чем у `base`).
+   - **STT:** либо локальный Whisper (`STT_PROVIDER=local`, `STT_MODEL=tiny`/`base`), либо OpenAI STT (`STT_PROVIDER=openai`, `OPENAI_API_KEY=sk-...`, `OPENAI_STT_MODEL=whisper-1`, `STT_CHUNK_SECONDS=2.0`). Для веб‑демо без «мусора» рекомендуется OpenAI.
    - `STORAGE_BUCKET`
    - `STORAGE_REGION`
    - `STORAGE_ENDPOINT_URL` (если не AWS)

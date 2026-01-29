@@ -119,7 +119,11 @@ pnpm test
 | `OPENROUTER_API_KEY` | API ключ OpenRouter |
 | `DATABASE_URL` | URL БД (локально SQLite; на Railway — Postgres, подставляется при добавлении сервиса) |
 | `LLM_MODEL` | Модель по умолчанию |
-| `STT_MODEL` | Модель Whisper: `tiny` (быстро, для веб‑демо), `base`, `small`, … |
+| `STT_PROVIDER` | `local` (faster-whisper) или `openai` (Whisper API) |
+| `STT_MODEL` | Модель Whisper при local: `tiny`, `base`, `small`, … |
+| `OPENAI_API_KEY` | Ключ OpenAI при STT_PROVIDER=openai |
+| `OPENAI_STT_MODEL` | Модель OpenAI STT (например `whisper-1`) |
+| `STT_CHUNK_SECONDS` | Длина буфера аудио в сек (для openai, напр. 2.0) |
 | `LOG_LEVEL` | Уровень логирования |
 
 ## Сборка desktop-приложения

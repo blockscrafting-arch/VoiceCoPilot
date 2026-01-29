@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     llm_fallback_model: str = "google/gemini-2.5-flash"
     stt_model: str = "base"
     stt_device: str = "cpu"
+    stt_provider: str = "local"  # local (faster-whisper) | openai (Whisper API)
+    openai_api_key: str = ""
+    openai_stt_model: str = "whisper-1"
+    stt_chunk_seconds: float = 2.0
     api_host: str = "127.0.0.1"
     api_port: int = 8000
     log_level: str = "INFO"
