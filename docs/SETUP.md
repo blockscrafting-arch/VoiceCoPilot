@@ -151,6 +151,9 @@ choco install ffmpeg
 # Или скачайте с ffmpeg.org
 ```
 
+### Транскрипция пустая на Railway
+Если используете `STT_PROVIDER=openai`, в Railway Variables обязательно задайте `OPENAI_API_KEY` (ключ OpenAI). Без него транскрипция возвращает пустой текст и в логах при старте будет предупреждение.
+
 ### Ошибка CUDA
 Если нет GPU, используйте CPU:
 ```env

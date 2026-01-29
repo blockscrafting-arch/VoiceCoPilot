@@ -60,6 +60,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         init_db()
     except Exception as exc:
         logger.exception("Database init failed; app will start but projects may fail", error=str(exc))
+    if settings.stt_provider == "openai" and not settings.openai_api_key:
+        logger.warning(
+            "STT_PROVIDER=openai but OPENAI_API_KEY is not set; transcription will return empty"
+        )
     if settings.stt_provider == "local":
         def _warmup_stt() -> None:
             try:

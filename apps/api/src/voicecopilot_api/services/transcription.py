@@ -11,6 +11,7 @@ from ..models.schemas import TranscriptionResult
 logger = get_logger(__name__)
 
 _default_service: Optional["TranscriptionService"] = None
+_openai_key_warned = False
 
 
 def get_transcription_service() -> "TranscriptionService":
@@ -90,8 +91,11 @@ class TranscriptionService:
 
     async def _transcribe_openai(self, pcm_bytes: bytes, sample_rate: int, channels: int) -> str:
         """Send PCM audio to OpenAI Whisper API; return transcribed text."""
+        global _openai_key_warned
         if not settings.openai_api_key:
-            logger.warning("OpenAI API key not set; skipping transcription")
+            if not _openai_key_warned:
+                _openai_key_warned = True
+                logger.warning("OpenAI API key not set; skipping transcription (logged once)")
             return ""
         wav_io = self._pcm16_to_wav(pcm_bytes, sample_rate, channels)
         try:
