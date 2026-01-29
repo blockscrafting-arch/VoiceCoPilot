@@ -19,8 +19,8 @@ COPY src/ ./src/
 ENV PYTHONPATH=/app/src
 ENV PYTHONUNBUFFERED=1
 
-# Expose port
+# Railway injects PORT at runtime; default 8000 for local runs
 EXPOSE 8000
 
-# Run the API server
-CMD ["uvicorn", "voicecopilot_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the API server (use $PORT so Railway healthcheck and proxy match)
+CMD ["sh", "-c", "exec uvicorn voicecopilot_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
