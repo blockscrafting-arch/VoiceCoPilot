@@ -20,8 +20,9 @@ COPY --from=builder /app/apps/web/dist ./apps/web/dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/web/node_modules ./apps/web/node_modules
 WORKDIR /app/apps/web
+RUN chmod +x /app/apps/web/docker-entrypoint.sh
 ENV NODE_ENV=production
 ENV PORT=4173
 EXPOSE 4173
-# Railway sets PORT at runtime; fallback so empty PORT never yields 0.0.0.0:
-CMD ["sh", "-c", "serve -s dist -l 0.0.0.0:${PORT:-4173}"]
+# Debug: log PORT and always start serve from entrypoint
+ENTRYPOINT ["/app/apps/web/docker-entrypoint.sh"]
