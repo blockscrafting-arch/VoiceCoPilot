@@ -22,5 +22,5 @@ COPY --from=builder /app/apps/web/node_modules ./apps/web/node_modules
 WORKDIR /app/apps/web
 ENV NODE_ENV=production
 EXPOSE 4173
-# Railway sets PORT at runtime.
-CMD ["sh", "-c", "serve -s dist -l ${PORT:-4173}"]
+# Railway sets PORT at runtime. Bind explicitly to 0.0.0.0 so proxy can reach the container.
+CMD ["sh", "-c", "serve -s dist -l 0.0.0.0:${PORT:-4173}"]
