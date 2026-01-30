@@ -19,6 +19,13 @@ const SUGGESTION_CACHE_TTL_MS = 15000;
 /** Max last messages sent to suggestions API (smaller = faster). */
 const SUGGESTION_HISTORY_SIZE = 6;
 
+/** Delay before flushing browser STT buffer (ms); longer = more complete phrases. */
+const BROWSER_STT_FLUSH_MS = 1100;
+/** Min length to send buffered browser transcript (avoid tiny fragments). */
+const BROWSER_STT_MIN_SEND_CHARS = 6;
+/** Min message length to include in suggestions history. */
+const SUGGESTION_MIN_MESSAGE_CHARS = 12;
+
 /**
  * Hook that wires live audio capture, WebSocket streaming,
  * and AI suggestions into the application state.
@@ -33,6 +40,7 @@ export function useLiveStreaming() {
     addMessage,
     setSuggestions,
     sttUserMode,
+    singleSpeakerMode,
   } = useAppStore();
   const { contextText, currentProjectId } = useProjectStore();
 
@@ -41,6 +49,8 @@ export function useLiveStreaming() {
 
   const wsRef = useRef<AudioWebSocket | null>(null);
   const browserSpeechRef = useRef<BrowserSpeechService | null>(null);
+  const browserTranscriptRef = useRef<string>("");
+  const browserFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debounceRef = useRef<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastTranscriptRef = useRef<{ user: string; other: string }>({
@@ -77,7 +87,8 @@ export function useLiveStreaming() {
         projectId: currentProjectId ?? "default",
         source: config.source,
       });
-    }
+    },
+    { enableOther: !singleSpeakerMode }
   );
 
   const startStreaming = useCallback(async () => {
@@ -90,6 +101,9 @@ export function useLiveStreaming() {
 
     ws.connect({
       onTranscript: (text, speaker) => {
+        if (singleSpeakerMode && speaker === "other") {
+          return;
+        }
         const t = text.trim();
         if (!t) {
           return;
@@ -127,13 +141,32 @@ export function useLiveStreaming() {
     setRecording(true);
 
     if (effectiveSttUserMode === "browser") {
+      browserTranscriptRef.current = "";
+      if (browserFlushTimerRef.current) {
+        clearTimeout(browserFlushTimerRef.current);
+        browserFlushTimerRef.current = null;
+      }
       const browserSpeech = new BrowserSpeechService();
       browserSpeechRef.current = browserSpeech;
       browserSpeech.start({
         onResult: (text, isFinal) => {
-          if (isFinal && text.trim()) {
-            wsRef.current?.sendClientTranscript("user", text);
+          const t = text.trim();
+          if (!t) return;
+          // Only buffer final segments to avoid duplicating interim+final for same phrase
+          if (!isFinal) return;
+          const buf = browserTranscriptRef.current;
+          browserTranscriptRef.current = buf ? `${buf} ${t}` : t;
+          if (browserFlushTimerRef.current) {
+            clearTimeout(browserFlushTimerRef.current);
           }
+          browserFlushTimerRef.current = setTimeout(() => {
+            browserFlushTimerRef.current = null;
+            const toSend = browserTranscriptRef.current.trim();
+            browserTranscriptRef.current = "";
+            if (toSend.length >= BROWSER_STT_MIN_SEND_CHARS) {
+              wsRef.current?.sendClientTranscript("user", toSend);
+            }
+          }, BROWSER_STT_FLUSH_MS);
         },
       });
     }
@@ -145,6 +178,7 @@ export function useLiveStreaming() {
     setRecording,
     startCapture,
     effectiveSttUserMode,
+    singleSpeakerMode,
   ]);
 
   const stopStreaming = useCallback(async () => {
@@ -152,6 +186,15 @@ export function useLiveStreaming() {
       return;
     }
 
+    if (browserFlushTimerRef.current) {
+      clearTimeout(browserFlushTimerRef.current);
+      browserFlushTimerRef.current = null;
+    }
+    const pending = browserTranscriptRef.current.trim();
+    if (pending.length >= BROWSER_STT_MIN_SEND_CHARS && wsRef.current) {
+      wsRef.current.sendClientTranscript("user", pending);
+    }
+    browserTranscriptRef.current = "";
     browserSpeechRef.current?.stop();
     browserSpeechRef.current = null;
     await stopCapture();
@@ -180,10 +223,18 @@ export function useLiveStreaming() {
 
     setLoadingSuggestions(true);
     debounceRef.current = window.setTimeout(async () => {
-      const raw = transcript.slice(-SUGGESTION_HISTORY_SIZE);
+      let raw = transcript.slice(-SUGGESTION_HISTORY_SIZE);
+      if (singleSpeakerMode) {
+        raw = raw.filter((m) => m.role === "user");
+      }
+      raw = raw.filter((m) => m.text.trim().length >= SUGGESTION_MIN_MESSAGE_CHARS);
       const history = raw.filter(
         (m, i) => i === 0 || m.text !== raw[i - 1].text || m.role !== raw[i - 1].role
       );
+      if (history.length === 0) {
+        setLoadingSuggestions(false);
+        return;
+      }
       const requestKey = JSON.stringify({
         h: history.map((m) => `${m.role}:${m.text}`),
         c: contextText,
@@ -249,6 +300,7 @@ export function useLiveStreaming() {
     currentProjectId,
     setLoadingSuggestions,
     setSuggestions,
+    singleSpeakerMode,
     transcript,
   ]);
 
@@ -272,6 +324,9 @@ export function useLiveStreaming() {
     return () => {
       if (debounceRef.current) {
         window.clearTimeout(debounceRef.current);
+      }
+      if (browserFlushTimerRef.current) {
+        clearTimeout(browserFlushTimerRef.current);
       }
       browserSpeechRef.current?.stop();
       browserSpeechRef.current = null;

@@ -16,12 +16,29 @@ interface ControlsProps {
  * Start/stop recording and clear transcript.
  */
 export function Controls({ onStart, onStop, error }: ControlsProps) {
-  const { isRecording, clearTranscript, sttUserMode, setSttUserMode } =
-    useAppStore();
+  const {
+    isRecording,
+    clearTranscript,
+    sttUserMode,
+    setSttUserMode,
+    singleSpeakerMode,
+    setSingleSpeakerMode,
+  } = useAppStore();
   const showSttToggle = isBrowserSpeechAvailable();
 
   return (
     <div className="flex items-center justify-center gap-4 p-4 bg-gray-800 border-t border-gray-700">
+      {/* Single speaker: only mic, no system/extension audio */}
+      <label className="flex items-center gap-2 cursor-pointer" title="Только микрофон: не захватывать системный звук; подсказки по вашей речи">
+        <input
+          type="checkbox"
+          checked={singleSpeakerMode}
+          onChange={(e) => setSingleSpeakerMode(e.target.checked)}
+          className="rounded border-gray-600 bg-gray-700 text-primary-500 focus:ring-primary-500"
+        />
+        <span className="text-xs text-gray-400">Один спикер</span>
+      </label>
+
       {/* STT mode for mic: browser (Chrome) or server */}
       {showSttToggle && (
         <div className="flex items-center gap-2">

@@ -41,16 +41,23 @@ interface AudioChunkPayload {
   channels: number;
 }
 
+export interface UseAudioCaptureOptions {
+  /** If false, do not capture extension/display audio (mic only). Default true. */
+  enableOther?: boolean;
+}
+
 /**
  * Hook for managing audio capture (mic + extension or getDisplayMedia fallback).
  *
  * @param onAudioChunk - Callback for received audio chunks
  * @param onConfig - Callback for stream config (sample rate, channels, speaker)
+ * @param options - enableOther: false for single-speaker (mic only)
  * @returns Audio capture state and controls
  */
 export function useAudioCapture(
   onAudioChunk?: (data: Uint8Array, speaker: Speaker) => void,
-  onConfig?: (config: AudioStreamConfig) => void
+  onConfig?: (config: AudioStreamConfig) => void,
+  options?: UseAudioCaptureOptions
 ): AudioCaptureState {
   const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,8 +134,9 @@ export function useAudioCapture(
         micConfigSent.current = true;
       }
 
-      // "Other" audio: extension or getDisplayMedia fallback
-      if (extensionAvailableRef.current) {
+      // "Other" audio: extension or getDisplayMedia fallback (skip when single-speaker)
+      const enableOther = options?.enableOther !== false;
+      if (enableOther && extensionAvailableRef.current) {
         const extensionListener = (event: MessageEvent) => {
           if (!event.data || event.data.source !== "voicecopilot-extension") {
             return;
@@ -169,7 +177,7 @@ export function useAudioCapture(
           { source: "voicecopilot-web", type: "startCapture", mode: "system" },
           "*"
         );
-      } else {
+      } else if (enableOther) {
         // Fallback: getDisplayMedia (screen/tab + audio)
         if (!navigator.mediaDevices?.getDisplayMedia) {
           setError("Захват экрана недоступен в этом браузере");
@@ -233,7 +241,7 @@ export function useAudioCapture(
       console.error("Failed to start capture:", e);
       return null;
     }
-  }, [onAudioChunk, onConfig]);
+  }, [onAudioChunk, onConfig, options?.enableOther]);
 
   const stopCapture = useCallback(async () => {
     try {

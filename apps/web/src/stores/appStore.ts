@@ -31,6 +31,9 @@ interface AppState {
   /** User mic STT: browser (Chrome) or server. Default browser when Web Speech API available. */
   sttUserMode: SttUserMode;
 
+  /** Only mic: do not capture system/extension audio; suggestions from user speech only. */
+  singleSpeakerMode: boolean;
+
   // Actions
   setConnected: (isConnected: boolean) => void;
   setRecording: (isRecording: boolean) => void;
@@ -39,6 +42,7 @@ interface AppState {
   clearTranscript: () => void;
   setSuggestions: (suggestions: string[]) => void;
   setSttUserMode: (mode: SttUserMode) => void;
+  setSingleSpeakerMode: (enabled: boolean) => void;
 }
 
 /**
@@ -52,6 +56,7 @@ export const useAppStore = create<AppState>((set) => ({
   suggestions: [],
   isLoadingSuggestions: false,
   sttUserMode: "browser",
+  singleSpeakerMode: true,
 
   setConnected: (isConnected) => set({ isConnected }),
 
@@ -86,4 +91,5 @@ export const useAppStore = create<AppState>((set) => ({
   },
 
   setSttUserMode: (sttUserMode) => set({ sttUserMode }),
+  setSingleSpeakerMode: (singleSpeakerMode) => set({ singleSpeakerMode }),
 }));
