@@ -55,7 +55,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     # Startup
     setup_logging()
-    logger.info("VoiceCoPilot API starting", version="0.1.0")
+    logger.info(
+        "VoiceCoPilot API starting",
+        version="0.1.0",
+        stt_provider=settings.stt_provider,
+        openai_stt_model=settings.openai_stt_model if settings.stt_provider == "openai" else None,
+        stt_chunk_seconds=settings.stt_chunk_seconds,
+    )
     try:
         init_db()
     except Exception as exc:

@@ -38,6 +38,8 @@ class LLMProvider:
         self._client = AsyncOpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=settings.openrouter_api_key,
+            timeout=30.0,
+            max_retries=2,
         )
         self._model = settings.llm_model
         self._fallback_model = settings.llm_fallback_model
@@ -70,8 +72,8 @@ class LLMProvider:
                 "content": f"Контекст: {context}",
             })
 
-        # Add conversation history
-        for msg in history[-10:]:  # Last 10 messages for context
+        # Add conversation history (last 6 for lower latency)
+        for msg in history[-6:]:
             role = "user" if msg.role == "user" else "assistant"
             messages.append({"role": role, "content": msg.text})
 
@@ -117,7 +119,7 @@ class LLMProvider:
         response = await self._client.chat.completions.create(
             model=model,
             messages=messages,  # type: ignore
-            max_tokens=500,
+            max_tokens=300,
             temperature=0.7,
         )
 

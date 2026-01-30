@@ -114,6 +114,8 @@ pnpm test
 
 ### Переменные окружения Railway (API)
 
+**Важно:** STT и LLM настраиваются **только в API‑сервисе** (Railway Variables у сервиса с Dockerfile из `apps/api`). Веб‑сервис (фронт) не читает STT/LLM переменные — он лишь обращается к API по URL из `config.json`.
+
 | Переменная | Описание |
 |------------|----------|
 | `OPENROUTER_API_KEY` | API ключ OpenRouter |
@@ -124,7 +126,7 @@ pnpm test
 | `STT_DEVICE` | **Только при STT_PROVIDER=local**: `cpu` или `cuda` |
 | `OPENAI_API_KEY` | Ключ OpenAI при STT_PROVIDER=openai |
 | `OPENAI_STT_MODEL` | Модель OpenAI STT (например `whisper-1`) |
-| `STT_CHUNK_SECONDS` | Длина буфера аудио в сек (для openai, напр. 2.0) |
+| `STT_CHUNK_SECONDS` | Длина буфера аудио в сек (для openai, напр. 1.0–1.5, меньше = быстрее ответ) |
 | `LOG_LEVEL` | Уровень логирования |
 
 ## Сборка desktop-приложения

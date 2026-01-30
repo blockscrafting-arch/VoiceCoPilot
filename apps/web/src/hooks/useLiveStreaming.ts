@@ -9,6 +9,12 @@ import { useAudioCapture } from "./useAudioCapture";
  */
 const SUGGESTION_DEBOUNCE_MS = 900;
 
+/** How long to reuse cached suggestions for the same request key (ms). */
+const SUGGESTION_CACHE_TTL_MS = 8000;
+
+/** Max last messages sent to suggestions API (smaller = faster). */
+const SUGGESTION_HISTORY_SIZE = 6;
+
 /**
  * Hook that wires live audio capture, WebSocket streaming,
  * and AI suggestions into the application state.
@@ -32,6 +38,11 @@ export function useLiveStreaming() {
     user: "",
     other: "",
   });
+  const suggestionCacheRef = useRef<{
+    key: string;
+    suggestions: string[];
+    at: number;
+  } | null>(null);
 
   const { startCapture, stopCapture, error } = useAudioCapture(
     (chunk, speaker) => {
@@ -137,16 +148,42 @@ export function useLiveStreaming() {
 
     setLoadingSuggestions(true);
     debounceRef.current = window.setTimeout(async () => {
+      const raw = transcript.slice(-SUGGESTION_HISTORY_SIZE);
+      const history = raw.filter(
+        (m, i) => i === 0 || m.text !== raw[i - 1].text || m.role !== raw[i - 1].role
+      );
+      const requestKey = JSON.stringify({
+        h: history.map((m) => `${m.role}:${m.text}`),
+        c: contextText,
+        p: currentProjectId ?? "default",
+      });
+      const cached = suggestionCacheRef.current;
+      const now = Date.now();
+      if (
+        cached &&
+        cached.key === requestKey &&
+        now - cached.at < SUGGESTION_CACHE_TTL_MS
+      ) {
+        setSuggestions(cached.suggestions);
+        setLoadingSuggestions(false);
+        return;
+      }
+
       const controller = new AbortController();
       abortRef.current = controller;
       try {
         const suggestions = await generateSuggestions(
-          transcript.slice(-10),
+          history,
           contextText,
           currentProjectId ?? undefined,
           controller.signal
         );
         if (!controller.signal.aborted) {
+          suggestionCacheRef.current = {
+            key: requestKey,
+            suggestions,
+            at: Date.now(),
+          };
           setSuggestions(suggestions);
         }
       } catch (e) {

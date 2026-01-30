@@ -32,6 +32,9 @@ CREDITS_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Minimum characters to send (skip noise / single-char)
+MIN_TRANSCRIPT_CHARS = 2
+
 
 def _normalize_text(text: str) -> str:
     """Normalize text for duplicate check (strip, collapse spaces)."""
@@ -43,10 +46,12 @@ def _should_skip_transcription(
     speaker: str,
     last_sent: dict[str, str],
 ) -> bool:
-    """Return True if we should not send this transcription (credits or duplicate)."""
+    """Return True if we should not send this transcription (credits, duplicate, or too short)."""
     if not text or not text.strip():
         return True
     normalized = _normalize_text(text)
+    if len(normalized) < MIN_TRANSCRIPT_CHARS:
+        return True
     if CREDITS_PATTERN.search(normalized):
         return True
     if last_sent.get(speaker) == normalized:
