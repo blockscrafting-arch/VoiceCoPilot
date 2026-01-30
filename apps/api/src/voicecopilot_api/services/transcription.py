@@ -77,6 +77,19 @@ class TranscriptionService:
             return
         self._ensure_model_loaded()
 
+    @staticmethod
+    def _pcm_rms(pcm_bytes: bytes, channels: int) -> float:
+        """Compute RMS of PCM16 audio (int16 scale). Used to detect silence before calling API."""
+        import numpy as np
+
+        arr = np.frombuffer(pcm_bytes, dtype=np.int16)
+        if channels > 1:
+            sample_count = (arr.size // channels) * channels
+            arr = arr[:sample_count].reshape(-1, channels).mean(axis=1)
+        if arr.size == 0:
+            return 0.0
+        return float(np.sqrt(np.mean(arr.astype(np.float64) ** 2)))
+
     def _pcm16_to_wav(self, pcm_bytes: bytes, sample_rate: int, channels: int) -> io.BytesIO:
         """Build a WAV file in memory from PCM16 bytes."""
         buf = io.BytesIO()
@@ -102,11 +115,16 @@ class TranscriptionService:
             from openai import OpenAI
 
             client = OpenAI(api_key=settings.openai_api_key)
-            response = client.audio.transcriptions.create(
-                model=settings.openai_stt_model,
-                file=wav_io,
-                language="ru",
-            )
+            model = settings.openai_stt_model
+            kwargs: dict = {
+                "model": model,
+                "file": wav_io,
+                "language": "ru",
+                "temperature": 0,
+            }
+            if model.startswith("gpt-4o-"):
+                kwargs["chunking_strategy"] = "auto"
+            response = client.audio.transcriptions.create(**kwargs)
             return (response.text or "").strip()
         except Exception as e:
             logger.exception("OpenAI transcription error", error=str(e))
@@ -149,6 +167,11 @@ class TranscriptionService:
                 return TranscriptionResult()
             pcm = self._buffers[speaker]
             self._buffers[speaker] = b""
+            silence_rms = getattr(settings, "stt_silence_rms", 0.0)
+            if silence_rms > 0:
+                rms = self._pcm_rms(pcm, channels)
+                if rms < silence_rms:
+                    return TranscriptionResult()
             text = await self._transcribe_openai(pcm, sample_rate, channels)
             return TranscriptionResult(text=text, is_final=True, speaker=speaker)
         else:

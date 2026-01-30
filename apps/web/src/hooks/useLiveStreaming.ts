@@ -7,10 +7,10 @@ import { useAudioCapture } from "./useAudioCapture";
 /**
  * Debounce delay for suggestions generation (higher = fewer requests when transcript updates often).
  */
-const SUGGESTION_DEBOUNCE_MS = 1400;
+const SUGGESTION_DEBOUNCE_MS = 1600;
 
 /** How long to reuse cached suggestions for the same request key (ms). */
-const SUGGESTION_CACHE_TTL_MS = 12000;
+const SUGGESTION_CACHE_TTL_MS = 15000;
 
 /** Max last messages sent to suggestions API (smaller = faster). */
 const SUGGESTION_HISTORY_SIZE = 6;
@@ -137,6 +137,11 @@ export function useLiveStreaming() {
 
   useEffect(() => {
     if (transcript.length === 0) {
+      return;
+    }
+    // Generate suggestions only after interlocutor's reply (other), not after user's own message
+    const lastRole = transcript[transcript.length - 1]?.role;
+    if (lastRole !== "other") {
       return;
     }
 

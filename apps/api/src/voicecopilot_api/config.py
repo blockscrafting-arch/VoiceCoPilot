@@ -26,8 +26,9 @@ class Settings(BaseSettings):
     stt_device: str = "cpu"
     stt_provider: str = "local"  # local (faster-whisper) | openai (Whisper API)
     openai_api_key: str = ""
-    openai_stt_model: str = "whisper-1"
+    openai_stt_model: str = "gpt-4o-mini-transcribe"
     stt_chunk_seconds: float = 1.5
+    stt_silence_rms: float = 300.0  # RMS below this = silence, skip OpenAI (0 = disabled)
     api_host: str = "127.0.0.1"
     api_port: int = 8000
     log_level: str = "INFO"

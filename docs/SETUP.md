@@ -125,8 +125,9 @@ pnpm test
 | `STT_MODEL` | Модель Whisper **только при STT_PROVIDER=local**: `tiny`, `base`, `small`, … |
 | `STT_DEVICE` | **Только при STT_PROVIDER=local**: `cpu` или `cuda` |
 | `OPENAI_API_KEY` | Ключ OpenAI при STT_PROVIDER=openai |
-| `OPENAI_STT_MODEL` | Модель OpenAI STT (например `whisper-1`) |
+| `OPENAI_STT_MODEL` | Модель OpenAI STT: `gpt-4o-mini-transcribe` (по умолчанию, меньше галлюцинаций), `gpt-4o-transcribe` (точнее), `whisper-1` (legacy) |
 | `STT_CHUNK_SECONDS` | Длина буфера аудио в сек (для openai, напр. 1.0–1.5, меньше = быстрее ответ) |
+| `STT_SILENCE_RMS` | Порог RMS тишины (0 = выкл): если RMS чанка ниже порога, OpenAI не вызывается (200–400 типично) |
 | `LOG_LEVEL` | Уровень логирования |
 
 ## Сборка desktop-приложения
@@ -158,7 +159,7 @@ choco install ffmpeg
 Если используете `STT_PROVIDER=openai`, в Railway Variables обязательно задайте `OPENAI_API_KEY` (ключ OpenAI). Без него транскрипция возвращает пустой текст и в логах при старте будет предупреждение. При `STT_PROVIDER=openai` переменные `STT_MODEL` и `STT_DEVICE` не используются — STT идёт через API OpenAI.
 
 ### В транскрипте фразы «С вами был…», «До скорой встречи», «Спасибо за внимание!»
-Это **галлюцинации Whisper**: на тишине или коротких чанках модель иногда «додумывает» типичные заставки/титры, которых в аудио нет. На бэкенде такие фразы отфильтровываются и не показываются в UI. Подробнее: [docs/decisions/003-whisper-hallucination-filter.md](decisions/003-whisper-hallucination-filter.md).
+Это **галлюцинации Whisper**: на тишине или коротких чанках модель иногда «додумывает» типичные заставки/титры, которых в аудио нет. На бэкенде такие фразы отфильтровываются и не показываются в UI. Для снижения галлюцинаций используйте `OPENAI_STT_MODEL=gpt-4o-mini-transcribe` и `STT_SILENCE_RMS=200–400`. Подробнее: [003-whisper-hallucination-filter.md](decisions/003-whisper-hallucination-filter.md), [004-stt-model-and-silence-rms.md](decisions/004-stt-model-and-silence-rms.md).
 
 ### Ошибка CUDA
 Если нет GPU, используйте CPU:

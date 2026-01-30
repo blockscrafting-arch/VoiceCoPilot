@@ -32,10 +32,11 @@ CREDITS_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Whisper hallucination: typical TV/radio outro phrases (no such sounds in room)
+# Whisper hallucination: typical TV/radio outro and subtitle credits (no such sounds in room)
 OUTRO_PATTERN = re.compile(
     r"с\s+вами\s+был|до\s+скорой\s+встречи|спасибо\s+за\s+внимание|"
-    r"продолжение\s+следует|игорь\s+негода",
+    r"продолжение\s+следует|игорь\s+негода|"
+    r"субтитры\s+(делал|создал|создавал|подогнали)",
     re.IGNORECASE,
 )
 
