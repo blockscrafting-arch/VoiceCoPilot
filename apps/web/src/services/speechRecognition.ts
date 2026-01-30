@@ -75,6 +75,7 @@ export class BrowserSpeechService {
   constructor() {
     if (!isBrowserSpeechAvailable()) return;
     const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Ctor) return;
     this.recognition = new Ctor() as SpeechRecognition;
     this.recognition.continuous = true;
     this.recognition.interimResults = true;
