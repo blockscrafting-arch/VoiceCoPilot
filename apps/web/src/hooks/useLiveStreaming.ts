@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef } from "react";
 import { AudioWebSocket, generateSuggestions } from "../lib/api";
+import {
+  BrowserSpeechService,
+  isBrowserSpeechAvailable,
+} from "../services/speechRecognition";
 import { useAppStore } from "../stores/appStore";
 import { useProjectStore } from "../stores/projectStore";
 import { useAudioCapture } from "./useAudioCapture";
@@ -28,10 +32,15 @@ export function useLiveStreaming() {
     setLoadingSuggestions,
     addMessage,
     setSuggestions,
+    sttUserMode,
   } = useAppStore();
   const { contextText, currentProjectId } = useProjectStore();
 
+  const effectiveSttUserMode =
+    isBrowserSpeechAvailable() ? sttUserMode : "server";
+
   const wsRef = useRef<AudioWebSocket | null>(null);
+  const browserSpeechRef = useRef<BrowserSpeechService | null>(null);
   const debounceRef = useRef<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastTranscriptRef = useRef<{ user: string; other: string }>({
@@ -50,7 +59,9 @@ export function useLiveStreaming() {
       if (!ws) {
         return;
       }
-
+      if (speaker === "user" && effectiveSttUserMode === "browser") {
+        return;
+      }
       const buffer = new Uint8Array(chunk).buffer;
       ws.sendAudio({ audioData: buffer, speaker });
     },
@@ -114,6 +125,18 @@ export function useLiveStreaming() {
       });
     });
     setRecording(true);
+
+    if (effectiveSttUserMode === "browser") {
+      const browserSpeech = new BrowserSpeechService();
+      browserSpeechRef.current = browserSpeech;
+      browserSpeech.start({
+        onResult: (text, isFinal) => {
+          if (isFinal && text.trim()) {
+            wsRef.current?.sendClientTranscript("user", text);
+          }
+        },
+      });
+    }
   }, [
     addMessage,
     currentProjectId,
@@ -121,6 +144,7 @@ export function useLiveStreaming() {
     setConnected,
     setRecording,
     startCapture,
+    effectiveSttUserMode,
   ]);
 
   const stopStreaming = useCallback(async () => {
@@ -128,6 +152,8 @@ export function useLiveStreaming() {
       return;
     }
 
+    browserSpeechRef.current?.stop();
+    browserSpeechRef.current = null;
     await stopCapture();
     wsRef.current?.disconnect();
     wsRef.current = null;
@@ -247,6 +273,8 @@ export function useLiveStreaming() {
       if (debounceRef.current) {
         window.clearTimeout(debounceRef.current);
       }
+      browserSpeechRef.current?.stop();
+      browserSpeechRef.current = null;
       wsRef.current?.disconnect();
     };
   }, []);

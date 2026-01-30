@@ -8,6 +8,9 @@ interface Message {
   text: string;
 }
 
+/** How user (mic) transcription is done: browser Web Speech API or server (OpenAI). */
+export type SttUserMode = "browser" | "server";
+
 /**
  * Application state interface.
  */
@@ -25,6 +28,9 @@ interface AppState {
   suggestions: string[];
   isLoadingSuggestions: boolean;
 
+  /** User mic STT: browser (Chrome) or server. Default browser when Web Speech API available. */
+  sttUserMode: SttUserMode;
+
   // Actions
   setConnected: (isConnected: boolean) => void;
   setRecording: (isRecording: boolean) => void;
@@ -32,6 +38,7 @@ interface AppState {
   addMessage: (role: "user" | "other", text: string) => void;
   clearTranscript: () => void;
   setSuggestions: (suggestions: string[]) => void;
+  setSttUserMode: (mode: SttUserMode) => void;
 }
 
 /**
@@ -44,10 +51,8 @@ export const useAppStore = create<AppState>((set) => ({
   transcript: [],
   suggestions: [],
   isLoadingSuggestions: false,
+  sttUserMode: "browser",
 
-  /**
-   * Update connection status.
-   */
   setConnected: (isConnected) => set({ isConnected }),
 
   /**
@@ -76,10 +81,9 @@ export const useAppStore = create<AppState>((set) => ({
     set({ transcript: [], suggestions: [] });
   },
 
-  /**
-   * Update suggestions list.
-   */
   setSuggestions: (suggestions) => {
     set({ suggestions, isLoadingSuggestions: false });
   },
+
+  setSttUserMode: (sttUserMode) => set({ sttUserMode }),
 }));

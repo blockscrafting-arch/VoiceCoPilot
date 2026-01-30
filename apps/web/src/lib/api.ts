@@ -331,6 +331,21 @@ export class AudioWebSocket {
   }
 
   /**
+   * Send client-side transcript (e.g. from browser Web Speech API) so server echoes it as transcription.
+   */
+  sendClientTranscript(speaker: string, text: string): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN && text.trim()) {
+      this.ws.send(
+        JSON.stringify({
+          type: "client_transcript",
+          speaker,
+          text: text.trim(),
+        })
+      );
+    }
+  }
+
+  /**
    * Send audio stream configuration.
    *
    * @param config - Sample rate and channels

@@ -232,6 +232,27 @@ async def audio_stream(websocket: WebSocket) -> None:
                         })
                     continue
 
+                if payload.get("type") == "client_transcript":
+                    speaker = payload.get("speaker") or "user"
+                    text = (payload.get("text") or "").strip()
+                    if not text:
+                        continue
+                    if _should_skip_transcription(text, speaker, last_sent_text):
+                        continue
+                    last_sent_text[speaker] = _normalize_text(text)
+                    transcript_entries.append({
+                        "timestamp": "",
+                        "speaker": speaker,
+                        "text": text,
+                    })
+                    await websocket.send_json({
+                        "type": "transcription",
+                        "text": text,
+                        "is_final": True,
+                        "speaker": speaker,
+                    })
+                    continue
+
                 continue
 
             # Receive audio chunk (binary)
