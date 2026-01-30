@@ -59,10 +59,7 @@ def test_suggestion_request():
 
 
 def test_suggestion_response():
-    """Test SuggestionResponse schema."""
-    response = SuggestionResponse(
-        suggestions=["Option 1", "Option 2", "Option 3"]
-    )
+    """Test SuggestionResponse schema (one reply)."""
+    response = SuggestionResponse(reply="Вот готовый ответ собеседнику.")
 
-    assert len(response.suggestions) == 3
-    assert response.suggestions[0] == "Option 1"
+    assert response.reply == "Вот готовый ответ собеседнику."

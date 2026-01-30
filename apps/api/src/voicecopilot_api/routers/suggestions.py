@@ -37,12 +37,12 @@ async def generate_suggestions(
             if project:
                 model_override = project.llm_model
 
-        suggestions = await llm_provider.generate_suggestions(
+        reply = await llm_provider.generate_reply(
             history=request.history,
             context=request.context,
             model_override=model_override,
         )
-        return SuggestionResponse(suggestions=suggestions)
+        return SuggestionResponse(reply=reply)
     except Exception as e:
         logger.exception("Failed to generate suggestions", error=str(e))
         raise HTTPException(status_code=500, detail="Failed to generate suggestions")

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { AudioWebSocket, generateSuggestions } from "../lib/api";
+import { AudioWebSocket, generateReply } from "../lib/api";
 import {
   BrowserSpeechService,
   isBrowserSpeechAvailable,
@@ -43,7 +43,7 @@ export function useLiveStreaming() {
     updateOrAppendDraft,
     finalizeDraft,
     appendToLastMessage,
-    setSuggestions,
+    setReplyText,
     sttUserMode,
   } = useAppStore();
   const { contextText, currentProjectId } = useProjectStore();
@@ -71,9 +71,9 @@ export function useLiveStreaming() {
   const lastSentClientTranscriptRef = useRef<string | null>(null);
   const lastOtherTimeRef = useRef<number>(0);
   const lastUserTimeRef = useRef<number>(0);
-  const suggestionCacheRef = useRef<{
+  const replyCacheRef = useRef<{
     key: string;
-    suggestions: string[];
+    reply: string;
     at: number;
   } | null>(null);
 
@@ -288,14 +288,14 @@ export function useLiveStreaming() {
         c: contextText,
         p: currentProjectId ?? "default",
       });
-      const cached = suggestionCacheRef.current;
       const now = Date.now();
+      const cached = replyCacheRef.current;
       if (
         cached &&
         cached.key === requestKey &&
         now - cached.at < SUGGESTION_CACHE_TTL_MS
       ) {
-        setSuggestions(cached.suggestions);
+        setReplyText(cached.reply);
         setLoadingSuggestions(false);
         return;
       }
@@ -303,28 +303,28 @@ export function useLiveStreaming() {
       const controller = new AbortController();
       abortRef.current = controller;
       try {
-        const suggestions = await generateSuggestions(
+        const reply = await generateReply(
           history,
           contextText,
           currentProjectId ?? undefined,
           controller.signal
         );
         if (!controller.signal.aborted) {
-          suggestionCacheRef.current = {
+          replyCacheRef.current = {
             key: requestKey,
-            suggestions,
+            reply,
             at: Date.now(),
           };
-          setSuggestions(suggestions);
+          setReplyText(reply);
         }
       } catch (e) {
         if ((e as Error).name === "AbortError") {
           return;
         }
         // #region agent log
-        if (import.meta.env.DEV) fetch('http://127.0.0.1:7246/ingest/b61f59fc-c1a9-4f8c-ae0e-5d177a7f7853',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useLiveStreaming.ts:104',message:'suggestions_fetch_error',data:{error:e instanceof Error ? e.message : String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
+        if (import.meta.env.DEV) fetch('http://127.0.0.1:7246/ingest/b61f59fc-c1a9-4f8c-ae0e-5d177a7f7853',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useLiveStreaming.ts:104',message:'reply_fetch_error',data:{error:e instanceof Error ? e.message : String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
         // #endregion
-        console.error("Failed to generate suggestions", e);
+        console.error("Failed to generate reply", e);
         if (!controller.signal.aborted) {
           setLoadingSuggestions(false);
         }
@@ -347,7 +347,7 @@ export function useLiveStreaming() {
     contextText,
     currentProjectId,
     setLoadingSuggestions,
-    setSuggestions,
+    setReplyText,
     transcript,
   ]);
 

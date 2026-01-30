@@ -1,7 +1,4 @@
-"""LLM provider for generating suggestions via OpenRouter."""
-
-import json
-import re
+"""LLM provider for generating one reply to the interlocutor via OpenRouter."""
 
 from openai import AsyncOpenAI
 
@@ -11,19 +8,12 @@ from ..models.schemas import Message
 
 logger = get_logger(__name__)
 
-# System prompt for generating suggestions
+# System prompt for generating one full reply
 SYSTEM_PROMPT = """Ты помогаешь пользователю в деловых разговорах. В диалоге:
-- «Вы» — это пользователь (тот, кому нужны подсказки).
+- «Вы» — это пользователь (тому, кому нужен ответ).
 - «Собеседник» — клиент или партнёр.
 
-Твоя задача: предлагать только фразы, которые может сказать пользователь (Вы), в ответ на реплику собеседника. Не предлагай реплики от лица собеседника.
-
-Правила:
-1. 2–3 варианта ответа, по одной фразе на строку.
-2. Каждый вариант — 1–2 предложения максимум, от лица пользователя.
-3. Профессионально и по теме последней реплики собеседника.
-4. Только русский язык.
-5. Формат ответа: только текст фраз, по одной на строку, без нумерации, маркеров и пояснений."""
+Твоя задача: сформулировать один полноценный ответ пользователя (Вы) собеседнику на последнюю реплику. Длина ответа — оптимальная под вопрос: кратко по сути или развёрнуто, если нужно. Не предлагай варианты и не нумеруй. Только один готовый текст ответа от лица пользователя, без пояснений и преамбул. Только русский язык."""
 
 
 class LLMProvider:
@@ -47,25 +37,24 @@ class LLMProvider:
         self._model = settings.llm_model
         self._fallback_model = settings.llm_fallback_model
 
-    async def generate_suggestions(
+    async def generate_reply(
         self,
         history: list[Message],
         context: str = "",
         model_override: str | None = None,
-    ) -> list[str]:
-        """Generate conversation suggestions based on history.
+    ) -> str:
+        """Generate one full reply from the user to the interlocutor.
 
         Args:
             history: Recent conversation messages.
             context: Additional context about the conversation.
 
         Returns:
-            List of suggested responses.
+            Single reply text (optimal length for the question).
 
         Raises:
             Exception: If both primary and fallback models fail.
         """
-        # Build dialogue as explicit "Собеседник:" / "Вы:" so the model keeps roles clear
         dialogue_lines = []
         for msg in history[-6:]:
             if msg.role == "user":
@@ -82,7 +71,7 @@ class LLMProvider:
         user_content_parts.append("Вот диалог:")
         user_content_parts.append(dialogue)
         user_content_parts.append(
-            "Собеседник только что сказал последнее сообщение. Что может ответить пользователь (Вы)? Дай 2–3 короткие фразы, по одной на строку, без нумерации."
+            "Собеседник только что сказал последнее сообщение. Напиши один готовый ответ пользователя (Вы) собеседнику. Только текст ответа, без пояснений."
         )
         messages.append({
             "role": "user",
@@ -91,10 +80,9 @@ class LLMProvider:
 
         primary_model = model_override or self._model
 
-        # Try primary model first
         try:
             response = await self._request_completion(messages, primary_model)
-            return self._parse_suggestions(response)
+            return self._parse_reply(response)
         except Exception as e:
             logger.warning(
                 "Primary model failed, trying fallback",
@@ -102,10 +90,9 @@ class LLMProvider:
                 error=str(e),
             )
 
-        # Try fallback model
         try:
             response = await self._request_completion(messages, self._fallback_model)
-            return self._parse_suggestions(response)
+            return self._parse_reply(response)
         except Exception as e:
             logger.exception("Fallback model also failed", error=str(e))
             raise
@@ -125,7 +112,7 @@ class LLMProvider:
         response = await self._client.chat.completions.create(
             model=model,
             messages=messages,  # type: ignore
-            max_tokens=300,
+            max_tokens=500,
             temperature=0.7,
         )
 
@@ -133,42 +120,11 @@ class LLMProvider:
         logger.debug("LLM response received", length=len(content))
         return content
 
-    def _parse_suggestions(self, response: str) -> list[str]:
-        """Parse suggestions from LLM response.
-
-        Args:
-            response: Raw response text from LLM.
-
-        Returns:
-            List of individual suggestions.
-        """
+    def _parse_reply(self, response: str) -> str:
+        """Parse one reply from LLM response (whole text or first paragraph)."""
         raw = response.strip()
-        suggestions: list[str] = []
-
-        # Try JSON array (e.g. ["фраза 1", "фраза 2"])
-        json_match = re.search(r"\[[\s\S]*?\]", raw)
-        if json_match:
-            try:
-                parsed = json.loads(json_match.group())
-                if isinstance(parsed, list):
-                    for x in parsed:
-                        if isinstance(x, str) and x.strip():
-                            suggestions.append(x.strip())
-                    if suggestions:
-                        return suggestions[:5]
-            except Exception:
-                pass
-
-        # Line-by-line: strip numbering, markers, take non-empty
-        for line in raw.split("\n"):
-            cleaned = line.strip()
-            if not cleaned:
-                continue
-            # Remove "1.", "1)", "- ", "* ", "• ", "— "
-            cleaned = re.sub(r"^\s*\d+[.)]\s*", "", cleaned)
-            cleaned = re.sub(r"^\s*[-*•—]\s*", "", cleaned)
-            cleaned = cleaned.strip()
-            if cleaned and len(cleaned) > 1:
-                suggestions.append(cleaned)
-
-        return suggestions[:5]  # Max 5 suggestions
+        if not raw:
+            return ""
+        # Use first paragraph if model output multiple; otherwise whole text
+        first_para = raw.split("\n\n")[0].strip()
+        return first_para if first_para else raw

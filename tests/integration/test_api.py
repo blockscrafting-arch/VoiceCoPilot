@@ -47,8 +47,8 @@ def test_suggestions_endpoint(client, sample_conversation):
 
     assert response.status_code == 200
     data = response.json()
-    assert "suggestions" in data
-    assert isinstance(data["suggestions"], list)
+    assert "reply" in data
+    assert isinstance(data["reply"], str)
 
 
 def test_suggestions_endpoint_empty_history(client):

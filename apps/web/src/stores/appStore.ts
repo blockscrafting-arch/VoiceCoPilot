@@ -26,8 +26,8 @@ interface AppState {
   // Transcript
   transcript: Message[];
 
-  // Suggestions
-  suggestions: string[];
+  /** One reply to the interlocutor (replaces multiple suggestions). */
+  replyText: string | null;
   isLoadingSuggestions: boolean;
 
   /** User mic STT: auto (browser if available else server), browser, or server. */
@@ -45,7 +45,7 @@ interface AppState {
   /** Append text to last message of role (merge within pause window). */
   appendToLastMessage: (role: "user" | "other", text: string) => void;
   clearTranscript: () => void;
-  setSuggestions: (suggestions: string[]) => void;
+  setReplyText: (text: string | null) => void;
   setSttUserMode: (mode: SttUserMode) => void;
 }
 
@@ -57,7 +57,7 @@ export const useAppStore = create<AppState>((set) => ({
   isConnected: false,
   isRecording: false,
   transcript: [],
-  suggestions: [],
+  replyText: null,
   isLoadingSuggestions: false,
   sttUserMode: "auto",
 
@@ -138,11 +138,11 @@ export const useAppStore = create<AppState>((set) => ({
    * Clear the conversation transcript.
    */
   clearTranscript: () => {
-    set({ transcript: [], suggestions: [] });
+    set({ transcript: [], replyText: null });
   },
 
-  setSuggestions: (suggestions) => {
-    set({ suggestions, isLoadingSuggestions: false });
+  setReplyText: (replyText) => {
+    set({ replyText, isLoadingSuggestions: false });
   },
 
   setSttUserMode: (sttUserMode) => set({ sttUserMode }),

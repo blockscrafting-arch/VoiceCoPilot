@@ -60,6 +60,6 @@ class SuggestionRequest(BaseModel):
 
 
 class SuggestionResponse(BaseModel):
-    """Response with generated suggestions."""
+    """Response with one generated reply to the interlocutor."""
 
-    suggestions: list[str]
+    reply: str
