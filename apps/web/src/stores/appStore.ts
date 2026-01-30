@@ -2,14 +2,16 @@ import { create } from "zustand";
 
 /**
  * Message in the conversation transcript.
+ * isDraft: true = live updating line (interim), not yet finalized.
  */
-interface Message {
+export interface Message {
   role: "user" | "other";
   text: string;
+  isDraft?: boolean;
 }
 
-/** How user (mic) transcription is done: browser Web Speech API or server (OpenAI). */
-export type SttUserMode = "browser" | "server";
+/** How user (mic) transcription is done: auto (browser if available else server), browser, or server. */
+export type SttUserMode = "auto" | "browser" | "server";
 
 /**
  * Application state interface.
@@ -28,21 +30,23 @@ interface AppState {
   suggestions: string[];
   isLoadingSuggestions: boolean;
 
-  /** User mic STT: browser (Chrome) or server. Default browser when Web Speech API available. */
+  /** User mic STT: auto (browser if available else server), browser, or server. */
   sttUserMode: SttUserMode;
-
-  /** Only mic: do not capture system/extension audio; suggestions from user speech only. */
-  singleSpeakerMode: boolean;
 
   // Actions
   setConnected: (isConnected: boolean) => void;
   setRecording: (isRecording: boolean) => void;
   setLoadingSuggestions: (isLoading: boolean) => void;
   addMessage: (role: "user" | "other", text: string) => void;
+  /** Update or append a draft line for role (live interim). */
+  updateOrAppendDraft: (role: "user" | "other", text: string) => void;
+  /** Mark current draft for role as final. */
+  finalizeDraft: (role: "user" | "other") => void;
+  /** Append text to last message of role (merge within pause window). */
+  appendToLastMessage: (role: "user" | "other", text: string) => void;
   clearTranscript: () => void;
   setSuggestions: (suggestions: string[]) => void;
   setSttUserMode: (mode: SttUserMode) => void;
-  setSingleSpeakerMode: (enabled: boolean) => void;
 }
 
 /**
@@ -55,8 +59,7 @@ export const useAppStore = create<AppState>((set) => ({
   transcript: [],
   suggestions: [],
   isLoadingSuggestions: false,
-  sttUserMode: "browser",
-  singleSpeakerMode: true,
+  sttUserMode: "auto",
 
   setConnected: (isConnected) => set({ isConnected }),
 
@@ -71,12 +74,64 @@ export const useAppStore = create<AppState>((set) => ({
   setLoadingSuggestions: (isLoading) => set({ isLoadingSuggestions: isLoading }),
 
   /**
-   * Add a message to the transcript.
+   * Add a message to the transcript (final).
    */
   addMessage: (role, text) => {
     set((state) => ({
-      transcript: [...state.transcript, { role, text }],
+      transcript: [...state.transcript, { role, text, isDraft: false }],
     }));
+  },
+
+  /**
+   * Update or append a draft line for role (live interim).
+   */
+  updateOrAppendDraft: (role, text) => {
+    set((state) => {
+      const last = state.transcript[state.transcript.length - 1];
+      if (last?.role === role && last?.isDraft) {
+        const next = [...state.transcript];
+        next[next.length - 1] = { ...last, text };
+        return { transcript: next };
+      }
+      return {
+        transcript: [...state.transcript, { role, text, isDraft: true }],
+      };
+    });
+  },
+
+  /**
+   * Mark current draft for role as final.
+   */
+  finalizeDraft: (role) => {
+    set((state) => {
+      const last = state.transcript[state.transcript.length - 1];
+      if (last?.role === role && last?.isDraft) {
+        const next = [...state.transcript];
+        next[next.length - 1] = { ...last, isDraft: false };
+        return { transcript: next };
+      }
+      return state;
+    });
+  },
+
+  /**
+   * Append text to last message of role (merge within pause window).
+   */
+  appendToLastMessage: (role, text) => {
+    set((state) => {
+      const last = state.transcript[state.transcript.length - 1];
+      if (last?.role === role && !last?.isDraft) {
+        const next = [...state.transcript];
+        next[next.length - 1] = {
+          ...last,
+          text: (last.text + " " + text).trim(),
+        };
+        return { transcript: next };
+      }
+      return {
+        transcript: [...state.transcript, { role, text, isDraft: false }],
+      };
+    });
   },
 
   /**
@@ -91,5 +146,4 @@ export const useAppStore = create<AppState>((set) => ({
   },
 
   setSttUserMode: (sttUserMode) => set({ sttUserMode }),
-  setSingleSpeakerMode: (singleSpeakerMode) => set({ singleSpeakerMode }),
 }));

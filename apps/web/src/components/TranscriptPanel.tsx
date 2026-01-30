@@ -43,12 +43,15 @@ export function TranscriptPanel() {
                   message.role === "user"
                     ? "bg-primary-600 text-white"
                     : "bg-gray-700 text-gray-200"
-                }`}
+                } ${message.isDraft ? "opacity-90 border border-dashed border-gray-500" : ""}`}
               >
                 <div className="text-xs text-gray-400 mb-1">
                   {message.role === "user" ? "Вы" : "Собеседник"}
+                  {message.isDraft && " (ввод…)"}
                 </div>
-                <p className="text-sm">{message.text}</p>
+                <p className={`text-sm ${message.isDraft ? "italic text-gray-300" : ""}`}>
+                  {message.text}
+                </p>
               </div>
             </div>
           ))

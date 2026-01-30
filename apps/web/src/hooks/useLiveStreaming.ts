@@ -23,6 +23,8 @@ const SUGGESTION_HISTORY_SIZE = 6;
 const BROWSER_STT_FLUSH_MS = 1100;
 /** Min length to send buffered browser transcript (avoid tiny fragments). */
 const BROWSER_STT_MIN_SEND_CHARS = 6;
+/** Merge server transcription chunks into one message if within this window (ms). */
+const MERGE_WINDOW_MS = 1500;
 /** Min message length to include in suggestions history. */
 const SUGGESTION_MIN_MESSAGE_CHARS = 12;
 
@@ -38,14 +40,22 @@ export function useLiveStreaming() {
     setRecording,
     setLoadingSuggestions,
     addMessage,
+    updateOrAppendDraft,
+    finalizeDraft,
+    appendToLastMessage,
     setSuggestions,
     sttUserMode,
-    singleSpeakerMode,
   } = useAppStore();
   const { contextText, currentProjectId } = useProjectStore();
 
   const effectiveSttUserMode =
-    isBrowserSpeechAvailable() ? sttUserMode : "server";
+    sttUserMode === "auto"
+      ? isBrowserSpeechAvailable()
+        ? "browser"
+        : "server"
+      : sttUserMode === "browser" && isBrowserSpeechAvailable()
+        ? "browser"
+        : "server";
 
   const wsRef = useRef<AudioWebSocket | null>(null);
   const browserSpeechRef = useRef<BrowserSpeechService | null>(null);
@@ -57,6 +67,10 @@ export function useLiveStreaming() {
     user: "",
     other: "",
   });
+  /** Echo filter: skip adding when server echoes back our client_transcript. */
+  const lastSentClientTranscriptRef = useRef<string | null>(null);
+  const lastOtherTimeRef = useRef<number>(0);
+  const lastUserTimeRef = useRef<number>(0);
   const suggestionCacheRef = useRef<{
     key: string;
     suggestions: string[];
@@ -88,7 +102,7 @@ export function useLiveStreaming() {
         source: config.source,
       });
     },
-    { enableOther: !singleSpeakerMode }
+    { enableOther: true }
   );
 
   const startStreaming = useCallback(async () => {
@@ -101,17 +115,35 @@ export function useLiveStreaming() {
 
     ws.connect({
       onTranscript: (text, speaker) => {
-        if (singleSpeakerMode && speaker === "other") {
-          return;
-        }
         const t = text.trim();
         if (!t) {
           return;
         }
         const role = speaker === "user" ? "user" : "other";
         const key = role === "user" ? "user" : "other";
-        if (lastTranscriptRef.current[key] === t) {
+        const now = Date.now();
+        if (role === "user" && lastSentClientTranscriptRef.current === t) {
+          lastSentClientTranscriptRef.current = null;
           return;
+        }
+        const currentTranscript = useAppStore.getState().transcript;
+        const lastMsg = currentTranscript[currentTranscript.length - 1];
+        if (role === "other") {
+          if (lastMsg?.role === "other" && !lastMsg?.isDraft && now - lastOtherTimeRef.current < MERGE_WINDOW_MS) {
+            lastOtherTimeRef.current = now;
+            appendToLastMessage("other", t);
+            return;
+          }
+          lastOtherTimeRef.current = now;
+        } else {
+          if (effectiveSttUserMode === "server") {
+            if (lastMsg?.role === "user" && !lastMsg?.isDraft && now - lastUserTimeRef.current < MERGE_WINDOW_MS) {
+              lastUserTimeRef.current = now;
+              appendToLastMessage("user", t);
+              return;
+            }
+            lastUserTimeRef.current = now;
+          }
         }
         lastTranscriptRef.current[key] = t;
         addMessage(role, text);
@@ -151,11 +183,15 @@ export function useLiveStreaming() {
       browserSpeech.start({
         onResult: (text, isFinal) => {
           const t = text.trim();
+          if (!isFinal) {
+            if (t) updateOrAppendDraft("user", t);
+            return;
+          }
           if (!t) return;
-          // Only buffer final segments to avoid duplicating interim+final for same phrase
-          if (!isFinal) return;
           const buf = browserTranscriptRef.current;
           browserTranscriptRef.current = buf ? `${buf} ${t}` : t;
+          const toShow = browserTranscriptRef.current.trim();
+          if (toShow) updateOrAppendDraft("user", toShow);
           if (browserFlushTimerRef.current) {
             clearTimeout(browserFlushTimerRef.current);
           }
@@ -164,6 +200,8 @@ export function useLiveStreaming() {
             const toSend = browserTranscriptRef.current.trim();
             browserTranscriptRef.current = "";
             if (toSend.length >= BROWSER_STT_MIN_SEND_CHARS) {
+              finalizeDraft("user");
+              lastSentClientTranscriptRef.current = toSend;
               wsRef.current?.sendClientTranscript("user", toSend);
             }
           }, BROWSER_STT_FLUSH_MS);
@@ -172,13 +210,15 @@ export function useLiveStreaming() {
     }
   }, [
     addMessage,
+    appendToLastMessage,
     currentProjectId,
+    finalizeDraft,
     isRecording,
     setConnected,
     setRecording,
     startCapture,
     effectiveSttUserMode,
-    singleSpeakerMode,
+    updateOrAppendDraft,
   ]);
 
   const stopStreaming = useCallback(async () => {
@@ -192,6 +232,8 @@ export function useLiveStreaming() {
     }
     const pending = browserTranscriptRef.current.trim();
     if (pending.length >= BROWSER_STT_MIN_SEND_CHARS && wsRef.current) {
+      finalizeDraft("user");
+      lastSentClientTranscriptRef.current = pending;
       wsRef.current.sendClientTranscript("user", pending);
     }
     browserTranscriptRef.current = "";
@@ -202,16 +244,15 @@ export function useLiveStreaming() {
     wsRef.current = null;
     setConnected(false);
     setRecording(false);
-  }, [isRecording, setConnected, setRecording, stopCapture]);
+  }, [finalizeDraft, isRecording, setConnected, setRecording, stopCapture]);
 
   useEffect(() => {
     if (transcript.length === 0) {
       return;
     }
-    // Generate when last is "other" (two channels) or when transcript has only "user" (single-speaker / mic only)
-    const lastRole = transcript[transcript.length - 1]?.role;
-    const hasOther = transcript.some((m) => m.role === "other");
-    if (lastRole !== "other" && hasOther) {
+    // Generate only when last message is from interlocutor (suggestions = what to reply)
+    const lastMsg = transcript[transcript.length - 1];
+    if (lastMsg?.role !== "other" || lastMsg?.isDraft) {
       return;
     }
 
@@ -223,10 +264,9 @@ export function useLiveStreaming() {
 
     setLoadingSuggestions(true);
     debounceRef.current = window.setTimeout(async () => {
-      let raw = transcript.slice(-SUGGESTION_HISTORY_SIZE);
-      if (singleSpeakerMode) {
-        raw = raw.filter((m) => m.role === "user");
-      }
+      let raw = transcript
+        .filter((m) => !m.isDraft)
+        .slice(-SUGGESTION_HISTORY_SIZE);
       raw = raw.filter((m) => m.text.trim().length >= SUGGESTION_MIN_MESSAGE_CHARS);
       const history = raw.filter(
         (m, i) => i === 0 || m.text !== raw[i - 1].text || m.role !== raw[i - 1].role
@@ -300,7 +340,6 @@ export function useLiveStreaming() {
     currentProjectId,
     setLoadingSuggestions,
     setSuggestions,
-    singleSpeakerMode,
     transcript,
   ]);
 

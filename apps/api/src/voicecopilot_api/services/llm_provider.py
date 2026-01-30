@@ -1,5 +1,8 @@
 """LLM provider for generating suggestions via OpenRouter."""
 
+import json
+import re
+
 from openai import AsyncOpenAI
 
 from ..config import settings
@@ -9,18 +12,18 @@ from ..models.schemas import Message
 logger = get_logger(__name__)
 
 # System prompt for generating suggestions
-SYSTEM_PROMPT = """Ты — ассистент для деловых созвонов. Твоя задача — помогать пользователю 
-вести разговор с клиентами. На основе контекста разговора предлагай короткие, 
-естественные фразы, которые пользователь может сказать дальше.
+SYSTEM_PROMPT = """Ты помогаешь пользователю в деловых разговорах. В диалоге:
+- «Вы» — это пользователь (тот, кому нужны подсказки).
+- «Собеседник» — клиент или партнёр.
+
+Твоя задача: предлагать только фразы, которые может сказать пользователь (Вы), в ответ на реплику собеседника. Не предлагай реплики от лица собеседника.
 
 Правила:
-1. Предлагай 2-3 варианта ответа.
-2. Каждый вариант — 1-2 предложения максимум.
-3. Будь профессиональным, но дружелюбным.
-4. Если нужен технический ответ — дай краткую суть.
-5. Отвечай на русском языке.
-
-Формат ответа — только список фраз, по одной на строку, без нумерации и маркеров."""
+1. 2–3 варианта ответа, по одной фразе на строку.
+2. Каждый вариант — 1–2 предложения максимум, от лица пользователя.
+3. Профессионально и по теме последней реплики собеседника.
+4. Только русский язык.
+5. Формат ответа: только текст фраз, по одной на строку, без нумерации, маркеров и пояснений."""
 
 
 class LLMProvider:
@@ -62,25 +65,28 @@ class LLMProvider:
         Raises:
             Exception: If both primary and fallback models fail.
         """
-        # Build conversation for LLM
+        # Build dialogue as explicit "Собеседник:" / "Вы:" so the model keeps roles clear
+        dialogue_lines = []
+        for msg in history[-6:]:
+            if msg.role == "user":
+                dialogue_lines.append(f"Вы: {msg.text}")
+            else:
+                dialogue_lines.append(f"Собеседник: {msg.text}")
+        dialogue = "\n".join(dialogue_lines)
+
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-        # Add context if provided
+        user_content_parts = []
         if context:
-            messages.append({
-                "role": "user",
-                "content": f"Контекст: {context}",
-            })
-
-        # Add conversation history (last 6 for lower latency)
-        for msg in history[-6:]:
-            role = "user" if msg.role == "user" else "assistant"
-            messages.append({"role": role, "content": msg.text})
-
-        # Add request for suggestions
+            user_content_parts.append(f"Контекст: {context}")
+        user_content_parts.append("Вот диалог:")
+        user_content_parts.append(dialogue)
+        user_content_parts.append(
+            "Собеседник только что сказал последнее сообщение. Что может ответить пользователь (Вы)? Дай 2–3 короткие фразы, по одной на строку, без нумерации."
+        )
         messages.append({
             "role": "user",
-            "content": "Что мне ответить? Предложи варианты.",
+            "content": "\n\n".join(user_content_parts),
         })
 
         primary_model = model_override or self._model
@@ -136,19 +142,33 @@ class LLMProvider:
         Returns:
             List of individual suggestions.
         """
-        lines = response.strip().split("\n")
-        suggestions = []
+        raw = response.strip()
+        suggestions: list[str] = []
 
-        for line in lines:
-            # Clean up the line
+        # Try JSON array (e.g. ["фраза 1", "фраза 2"])
+        json_match = re.search(r"\[[\s\S]*?\]", raw)
+        if json_match:
+            try:
+                parsed = json.loads(json_match.group())
+                if isinstance(parsed, list):
+                    for x in parsed:
+                        if isinstance(x, str) and x.strip():
+                            suggestions.append(x.strip())
+                    if suggestions:
+                        return suggestions[:5]
+            except Exception:
+                pass
+
+        # Line-by-line: strip numbering, markers, take non-empty
+        for line in raw.split("\n"):
             cleaned = line.strip()
-            # Remove common prefixes like "1.", "- ", "* "
-            if cleaned and cleaned[0].isdigit() and "." in cleaned[:3]:
-                cleaned = cleaned.split(".", 1)[1].strip()
-            elif cleaned.startswith(("-", "*", "•")):
-                cleaned = cleaned[1:].strip()
-
-            if cleaned:
+            if not cleaned:
+                continue
+            # Remove "1.", "1)", "- ", "* ", "• ", "— "
+            cleaned = re.sub(r"^\s*\d+[.)]\s*", "", cleaned)
+            cleaned = re.sub(r"^\s*[-*•—]\s*", "", cleaned)
+            cleaned = cleaned.strip()
+            if cleaned and len(cleaned) > 1:
                 suggestions.append(cleaned)
 
         return suggestions[:5]  # Max 5 suggestions

@@ -16,30 +16,13 @@ interface ControlsProps {
  * Start/stop recording and clear transcript.
  */
 export function Controls({ onStart, onStop, error }: ControlsProps) {
-  const {
-    isRecording,
-    clearTranscript,
-    sttUserMode,
-    setSttUserMode,
-    singleSpeakerMode,
-    setSingleSpeakerMode,
-  } = useAppStore();
+  const { isRecording, clearTranscript, sttUserMode, setSttUserMode } =
+    useAppStore();
   const showSttToggle = isBrowserSpeechAvailable();
 
   return (
     <div className="flex items-center justify-center gap-4 p-4 bg-gray-800 border-t border-gray-700">
-      {/* Single speaker: only mic, no system/extension audio */}
-      <label className="flex items-center gap-2 cursor-pointer" title="Только микрофон: не захватывать системный звук; подсказки по вашей речи">
-        <input
-          type="checkbox"
-          checked={singleSpeakerMode}
-          onChange={(e) => setSingleSpeakerMode(e.target.checked)}
-          className="rounded border-gray-600 bg-gray-700 text-primary-500 focus:ring-primary-500"
-        />
-        <span className="text-xs text-gray-400">Один спикер</span>
-      </label>
-
-      {/* STT mode for mic: browser (Chrome) or server */}
+      {/* STT mode for mic: auto (browser if available), browser, or server */}
       {showSttToggle && (
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500">Микрофон:</span>
@@ -47,8 +30,9 @@ export function Controls({ onStart, onStop, error }: ControlsProps) {
             value={sttUserMode}
             onChange={(e) => setSttUserMode(e.target.value as SttUserMode)}
             className="text-xs bg-gray-700 text-gray-300 border border-gray-600 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary-500"
-            title="Браузер — распознавание в Chrome без сервера. Сервер — через OpenAI."
+            title="Авто — браузер, если доступен, иначе сервер. Браузер — Chrome. Сервер — OpenAI."
           >
+            <option value="auto">авто</option>
             <option value="browser">браузер (Chrome)</option>
             <option value="server">сервер</option>
           </select>
