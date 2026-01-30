@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useProjectStore } from "../stores/projectStore";
+import {
+  OPENROUTER_MODEL_GROUPS,
+  OPENROUTER_MODEL_VALUES,
+} from "../lib/openRouterModels";
 
 /**
  * Project selection and creation controls.
@@ -59,12 +63,6 @@ export function ProjectSelector() {
     setNewProjectName("");
   };
 
-  const modelOptions = [
-    { value: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash" },
-    { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-    { value: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet" },
-  ];
-
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -97,16 +95,28 @@ export function ProjectSelector() {
         >
           Создать
         </button>
+        <span className="text-xs text-gray-500">Модель (OpenRouter):</span>
         <select
           className="bg-gray-900 text-gray-200 text-sm rounded-md px-3 py-2 border border-gray-700"
           value={llmModel}
           onChange={(event) => updateModel(event.target.value)}
           disabled={isLoading || !currentProjectId}
+          title="Модель LLM для подсказок"
         >
-          {modelOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
+          {llmModel &&
+            !OPENROUTER_MODEL_VALUES.includes(llmModel) && (
+              <option value={llmModel}>
+                Текущая: {llmModel}
+              </option>
+            )}
+          {OPENROUTER_MODEL_GROUPS.map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </div>
