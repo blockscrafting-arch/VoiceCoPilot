@@ -132,24 +132,49 @@ export function useLiveStreaming() {
     if (debounceRef.current) {
       window.clearTimeout(debounceRef.current);
     }
+    abortRef.current?.abort();
+    abortRef.current = null;
 
     setLoadingSuggestions(true);
     debounceRef.current = window.setTimeout(async () => {
+      const controller = new AbortController();
+      abortRef.current = controller;
       try {
         const suggestions = await generateSuggestions(
           transcript.slice(-10),
           contextText,
-          currentProjectId ?? undefined
+          currentProjectId ?? undefined,
+          controller.signal
         );
-        setSuggestions(suggestions);
+        if (!controller.signal.aborted) {
+          setSuggestions(suggestions);
+        }
       } catch (e) {
+        if ((e as Error).name === "AbortError") {
+          return;
+        }
         // #region agent log
         if (import.meta.env.DEV) fetch('http://127.0.0.1:7246/ingest/b61f59fc-c1a9-4f8c-ae0e-5d177a7f7853',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useLiveStreaming.ts:104',message:'suggestions_fetch_error',data:{error:e instanceof Error ? e.message : String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
         // #endregion
         console.error("Failed to generate suggestions", e);
-        setLoadingSuggestions(false);
+        if (!controller.signal.aborted) {
+          setLoadingSuggestions(false);
+        }
+      } finally {
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+        }
       }
     }, SUGGESTION_DEBOUNCE_MS);
+
+    return () => {
+      if (debounceRef.current) {
+        window.clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
   }, [
     contextText,
     currentProjectId,
