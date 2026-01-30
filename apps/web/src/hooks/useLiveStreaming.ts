@@ -19,12 +19,12 @@ const SUGGESTION_CACHE_TTL_MS = 15000;
 /** Max last messages sent to suggestions API (smaller = faster). */
 const SUGGESTION_HISTORY_SIZE = 6;
 
-/** Delay before flushing browser STT buffer (ms); longer = more complete phrases. */
-const BROWSER_STT_FLUSH_MS = 1100;
+/** Delay before flushing browser STT after last result (ms); reset on any interim/final to avoid micro-pause breaks. */
+const BROWSER_STT_FLUSH_MS = 1800;
 /** Min length to send buffered browser transcript (avoid tiny fragments). */
 const BROWSER_STT_MIN_SEND_CHARS = 6;
 /** Merge server transcription chunks into one message if within this window (ms). */
-const MERGE_WINDOW_MS = 1500;
+const MERGE_WINDOW_MS = 1800;
 /** Min message length to include in suggestions history. */
 const SUGGESTION_MIN_MESSAGE_CHARS = 12;
 
@@ -183,28 +183,36 @@ export function useLiveStreaming() {
       browserSpeech.start({
         onResult: (text, isFinal) => {
           const t = text.trim();
+          if (browserFlushTimerRef.current) {
+            clearTimeout(browserFlushTimerRef.current);
+            browserFlushTimerRef.current = null;
+          }
+          const scheduleFlush = () => {
+            browserFlushTimerRef.current = setTimeout(() => {
+              browserFlushTimerRef.current = null;
+              const toSend = browserTranscriptRef.current.trim();
+              browserTranscriptRef.current = "";
+              if (toSend.length >= BROWSER_STT_MIN_SEND_CHARS) {
+                finalizeDraft("user");
+                lastSentClientTranscriptRef.current = toSend;
+                wsRef.current?.sendClientTranscript("user", toSend);
+              }
+            }, BROWSER_STT_FLUSH_MS);
+          };
           if (!isFinal) {
             if (t) updateOrAppendDraft("user", t);
+            scheduleFlush();
             return;
           }
-          if (!t) return;
+          if (!t) {
+            scheduleFlush();
+            return;
+          }
           const buf = browserTranscriptRef.current;
           browserTranscriptRef.current = buf ? `${buf} ${t}` : t;
           const toShow = browserTranscriptRef.current.trim();
           if (toShow) updateOrAppendDraft("user", toShow);
-          if (browserFlushTimerRef.current) {
-            clearTimeout(browserFlushTimerRef.current);
-          }
-          browserFlushTimerRef.current = setTimeout(() => {
-            browserFlushTimerRef.current = null;
-            const toSend = browserTranscriptRef.current.trim();
-            browserTranscriptRef.current = "";
-            if (toSend.length >= BROWSER_STT_MIN_SEND_CHARS) {
-              finalizeDraft("user");
-              lastSentClientTranscriptRef.current = toSend;
-              wsRef.current?.sendClientTranscript("user", toSend);
-            }
-          }, BROWSER_STT_FLUSH_MS);
+          scheduleFlush();
         },
       });
     }
