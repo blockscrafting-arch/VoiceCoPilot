@@ -139,9 +139,10 @@ export function useLiveStreaming() {
     if (transcript.length === 0) {
       return;
     }
-    // Generate suggestions only after interlocutor's reply (other), not after user's own message
+    // Generate when last is "other" (two channels) or when transcript has only "user" (single-speaker / mic only)
     const lastRole = transcript[transcript.length - 1]?.role;
-    if (lastRole !== "other") {
+    const hasOther = transcript.some((m) => m.role === "other");
+    if (lastRole !== "other" && hasOther) {
       return;
     }
 

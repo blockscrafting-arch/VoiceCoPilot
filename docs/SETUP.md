@@ -125,7 +125,7 @@ pnpm test
 | `STT_MODEL` | Модель Whisper **только при STT_PROVIDER=local**: `tiny`, `base`, `small`, … |
 | `STT_DEVICE` | **Только при STT_PROVIDER=local**: `cpu` или `cuda` |
 | `OPENAI_API_KEY` | Ключ OpenAI при STT_PROVIDER=openai |
-| `OPENAI_STT_MODEL` | Модель OpenAI STT: `gpt-4o-mini-transcribe` (по умолчанию, меньше галлюцинаций), `gpt-4o-transcribe` (точнее), `whisper-1` (legacy) |
+| `OPENAI_STT_MODEL` | Модель OpenAI STT: `gpt-4o-mini-transcribe` (по умолчанию), `gpt-4o-transcribe` (точнее), `gpt-4o-transcribe-diarize` (разделение спикеров; формат ответа может отличаться — см. документацию OpenAI), `whisper-1` (legacy) |
 | `STT_CHUNK_SECONDS` | Длина буфера аудио в сек (для openai, напр. 1.0–1.5, меньше = быстрее ответ) |
 | `STT_SILENCE_RMS` | Порог RMS тишины (0 = выкл): если RMS чанка ниже порога, OpenAI не вызывается (200–400 типично) |
 | `LOG_LEVEL` | Уровень логирования |
