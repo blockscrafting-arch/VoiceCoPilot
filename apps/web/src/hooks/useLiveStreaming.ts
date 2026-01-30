@@ -5,12 +5,12 @@ import { useProjectStore } from "../stores/projectStore";
 import { useAudioCapture } from "./useAudioCapture";
 
 /**
- * Debounce delay for suggestions generation.
+ * Debounce delay for suggestions generation (higher = fewer requests when transcript updates often).
  */
-const SUGGESTION_DEBOUNCE_MS = 900;
+const SUGGESTION_DEBOUNCE_MS = 1400;
 
 /** How long to reuse cached suggestions for the same request key (ms). */
-const SUGGESTION_CACHE_TTL_MS = 8000;
+const SUGGESTION_CACHE_TTL_MS = 12000;
 
 /** Max last messages sent to suggestions API (smaller = faster). */
 const SUGGESTION_HISTORY_SIZE = 6;

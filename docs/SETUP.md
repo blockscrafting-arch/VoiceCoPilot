@@ -157,6 +157,9 @@ choco install ffmpeg
 ### Транскрипция пустая на Railway
 Если используете `STT_PROVIDER=openai`, в Railway Variables обязательно задайте `OPENAI_API_KEY` (ключ OpenAI). Без него транскрипция возвращает пустой текст и в логах при старте будет предупреждение. При `STT_PROVIDER=openai` переменные `STT_MODEL` и `STT_DEVICE` не используются — STT идёт через API OpenAI.
 
+### В транскрипте фразы «С вами был…», «До скорой встречи», «Спасибо за внимание!»
+Это **галлюцинации Whisper**: на тишине или коротких чанках модель иногда «додумывает» типичные заставки/титры, которых в аудио нет. На бэкенде такие фразы отфильтровываются и не показываются в UI. Подробнее: [docs/decisions/003-whisper-hallucination-filter.md](decisions/003-whisper-hallucination-filter.md).
+
 ### Ошибка CUDA
 Если нет GPU, используйте CPU:
 ```env
