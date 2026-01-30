@@ -18,12 +18,22 @@ interface ControlsProps {
 export function Controls({ onStart, onStop, error }: ControlsProps) {
   const { isRecording, clearTranscript, sttUserMode, setSttUserMode } =
     useAppStore();
-  const showSttToggle = isBrowserSpeechAvailable();
+  const browserAvailable = isBrowserSpeechAvailable();
+  const effectiveMode =
+    sttUserMode === "auto"
+      ? browserAvailable
+        ? "browser"
+        : "server"
+      : sttUserMode === "browser" && browserAvailable
+        ? "browser"
+        : "server";
+  const isAutoFallbackToServer =
+    sttUserMode === "auto" && !browserAvailable;
 
   return (
     <div className="flex items-center justify-center gap-4 p-4 bg-gray-800 border-t border-gray-700">
       {/* STT mode for mic: auto (browser if available), browser, or server */}
-      {showSttToggle && (
+      <div className="flex flex-col gap-0.5">
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500">Микрофон:</span>
           <select
@@ -33,11 +43,23 @@ export function Controls({ onStart, onStop, error }: ControlsProps) {
             title="Авто — браузер, если доступен, иначе сервер. Браузер — Chrome. Сервер — OpenAI."
           >
             <option value="auto">авто</option>
-            <option value="browser">браузер (Chrome)</option>
+            <option value="browser" disabled={!browserAvailable}>
+              браузер (Chrome)
+            </option>
             <option value="server">сервер</option>
           </select>
+          {sttUserMode === "auto" && (
+            <span className="text-xs text-gray-400">
+              → {effectiveMode === "browser" ? "браузер" : "сервер"}
+            </span>
+          )}
         </div>
-      )}
+        {isAutoFallbackToServer && (
+          <p className="text-xs text-gray-500">
+            Web Speech недоступен — точность может быть ниже
+          </p>
+        )}
+      </div>
 
       {/* Start/Stop Recording */}
       <button
