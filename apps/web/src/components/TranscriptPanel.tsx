@@ -25,6 +25,9 @@ export function TranscriptPanel() {
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto p-4 space-y-3"
+        role="log"
+        aria-live="polite"
+        aria-label="Транскрипт разговора"
       >
         {transcript.length === 0 ? (
           <div className="text-center text-gray-500 py-8">

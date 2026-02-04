@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { AudioWebSocket, generateReply } from "../lib/api";
+import { buildSuggestionHistory } from "../lib/suggestionHistory";
 import {
   BrowserSpeechService,
   isBrowserSpeechAvailable,
@@ -8,25 +9,14 @@ import { useAppStore } from "../stores/appStore";
 import { useProjectStore } from "../stores/projectStore";
 import { useAudioCapture } from "./useAudioCapture";
 
-/**
- * Debounce delay for suggestions generation (higher = fewer requests when transcript updates often).
- */
-const SUGGESTION_DEBOUNCE_MS = 1600;
-
-/** How long to reuse cached suggestions for the same request key (ms). */
-const SUGGESTION_CACHE_TTL_MS = 15000;
-
-/** Max last messages sent to suggestions API (smaller = faster). */
-const SUGGESTION_HISTORY_SIZE = 6;
-
 /** Delay before flushing browser STT after last result (ms); reset on any interim/final to avoid micro-pause breaks. */
 const BROWSER_STT_FLUSH_MS = 1800;
 /** Min length to send buffered browser transcript (avoid tiny fragments). */
 const BROWSER_STT_MIN_SEND_CHARS = 6;
 /** Merge server transcription chunks into one message if within this window (ms). */
 const MERGE_WINDOW_MS = 1800;
-/** Min message length to include in suggestions history. */
-const SUGGESTION_MIN_MESSAGE_CHARS = 12;
+/** If same text arrived from the other speaker within this window (ms), treat as echo and skip. */
+const ECHO_GUARD_WINDOW_MS = 4000;
 
 /**
  * Hook that wires live audio capture, WebSocket streaming,
@@ -35,15 +25,15 @@ const SUGGESTION_MIN_MESSAGE_CHARS = 12;
 export function useLiveStreaming() {
   const {
     isRecording,
-    transcript,
     setConnected,
     setRecording,
-    setLoadingSuggestions,
     addMessage,
     updateOrAppendDraft,
     finalizeDraft,
     appendToLastMessage,
-    setReplyText,
+    addSuggestionRequest,
+    setSuggestionResult,
+    setOtherAudioSource,
     sttUserMode,
   } = useAppStore();
   const { contextText, currentProjectId } = useProjectStore();
@@ -61,8 +51,6 @@ export function useLiveStreaming() {
   const browserSpeechRef = useRef<BrowserSpeechService | null>(null);
   const browserTranscriptRef = useRef<string>("");
   const browserFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debounceRef = useRef<number | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
   const lastTranscriptRef = useRef<{ user: string; other: string }>({
     user: "",
     other: "",
@@ -71,11 +59,11 @@ export function useLiveStreaming() {
   const lastSentClientTranscriptRef = useRef<string | null>(null);
   const lastOtherTimeRef = useRef<number>(0);
   const lastUserTimeRef = useRef<number>(0);
-  const replyCacheRef = useRef<{
-    key: string;
-    reply: string;
-    at: number;
-  } | null>(null);
+  /** Echo guard: last normalized text + time per role; skip if other role had same text recently. */
+  const lastTextByRoleRef = useRef<{ user: { text: string; at: number }; other: { text: string; at: number } }>({
+    user: { text: "", at: 0 },
+    other: { text: "", at: 0 },
+  });
 
   const { startCapture, stopCapture, error } = useAudioCapture(
     (chunk, speaker) => {
@@ -126,11 +114,22 @@ export function useLiveStreaming() {
           lastSentClientTranscriptRef.current = null;
           return;
         }
+        const normalized = t.replace(/\s+/g, " ").trim();
+        const otherRole = role === "user" ? "other" : "user";
+        const otherEntry = lastTextByRoleRef.current[otherRole];
+        if (
+          normalized.length >= 2 &&
+          otherEntry.text === normalized &&
+          now - otherEntry.at < ECHO_GUARD_WINDOW_MS
+        ) {
+          return;
+        }
         const currentTranscript = useAppStore.getState().transcript;
         const lastMsg = currentTranscript[currentTranscript.length - 1];
         if (role === "other") {
           if (lastMsg?.role === "other" && !lastMsg?.isDraft && now - lastOtherTimeRef.current < MERGE_WINDOW_MS) {
             lastOtherTimeRef.current = now;
+            lastTextByRoleRef.current.other = { text: normalized, at: now };
             appendToLastMessage("other", t);
             return;
           }
@@ -139,14 +138,16 @@ export function useLiveStreaming() {
           if (effectiveSttUserMode === "server") {
             if (lastMsg?.role === "user" && !lastMsg?.isDraft && now - lastUserTimeRef.current < MERGE_WINDOW_MS) {
               lastUserTimeRef.current = now;
+              lastTextByRoleRef.current.user = { text: normalized, at: now };
               appendToLastMessage("user", t);
               return;
             }
             lastUserTimeRef.current = now;
           }
         }
+        lastTextByRoleRef.current[key] = { text: normalized, at: now };
         lastTranscriptRef.current[key] = t;
-        addMessage(role, text);
+        addMessage(role, t);
       },
       onOpen: () => setConnected(true),
       onClose: () => setConnected(false),
@@ -160,6 +161,15 @@ export function useLiveStreaming() {
       setConnected(false);
       return;
     }
+
+    const otherConfig = configs.find((c) => c.speaker === "other");
+    setOtherAudioSource(
+      otherConfig?.source === "extension"
+        ? "extension"
+        : otherConfig?.source === "display"
+          ? "display"
+          : null
+    );
 
     configs.forEach((config) => {
       ws.sendConfig({
@@ -224,6 +234,7 @@ export function useLiveStreaming() {
     isRecording,
     setConnected,
     setRecording,
+    setOtherAudioSource,
     startCapture,
     effectiveSttUserMode,
     updateOrAppendDraft,
@@ -250,106 +261,40 @@ export function useLiveStreaming() {
     await stopCapture();
     wsRef.current?.disconnect();
     wsRef.current = null;
+    setOtherAudioSource(null);
     setConnected(false);
     setRecording(false);
-  }, [finalizeDraft, isRecording, setConnected, setRecording, stopCapture]);
-
-  useEffect(() => {
-    if (transcript.length === 0) {
-      return;
-    }
-    // Generate only when last message is from interlocutor (suggestions = what to reply)
-    const lastMsg = transcript[transcript.length - 1];
-    if (lastMsg?.role !== "other" || lastMsg?.isDraft) {
-      return;
-    }
-
-    if (debounceRef.current) {
-      window.clearTimeout(debounceRef.current);
-    }
-    abortRef.current?.abort();
-    abortRef.current = null;
-
-    setLoadingSuggestions(true);
-    debounceRef.current = window.setTimeout(async () => {
-      let raw = transcript
-        .filter((m) => !m.isDraft)
-        .slice(-SUGGESTION_HISTORY_SIZE);
-      raw = raw.filter((m) => m.text.trim().length >= SUGGESTION_MIN_MESSAGE_CHARS);
-      const history = raw.filter(
-        (m, i) => i === 0 || m.text !== raw[i - 1].text || m.role !== raw[i - 1].role
-      );
-      if (history.length === 0) {
-        setLoadingSuggestions(false);
-        return;
-      }
-      const requestKey = JSON.stringify({
-        h: history.map((m) => `${m.role}:${m.text}`),
-        c: contextText,
-        p: currentProjectId ?? "default",
-      });
-      const now = Date.now();
-      const cached = replyCacheRef.current;
-      if (
-        cached &&
-        cached.key === requestKey &&
-        now - cached.at < SUGGESTION_CACHE_TTL_MS
-      ) {
-        setReplyText(cached.reply);
-        setLoadingSuggestions(false);
-        return;
-      }
-
-      const controller = new AbortController();
-      abortRef.current = controller;
-      try {
-        const reply = await generateReply(
-          history,
-          contextText,
-          currentProjectId ?? undefined,
-          controller.signal
-        );
-        if (!controller.signal.aborted) {
-          replyCacheRef.current = {
-            key: requestKey,
-            reply,
-            at: Date.now(),
-          };
-          setReplyText(reply);
-        }
-      } catch (e) {
-        if ((e as Error).name === "AbortError") {
-          return;
-        }
-        // #region agent log
-        if (import.meta.env.DEV) fetch('http://127.0.0.1:7246/ingest/b61f59fc-c1a9-4f8c-ae0e-5d177a7f7853',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useLiveStreaming.ts:104',message:'reply_fetch_error',data:{error:e instanceof Error ? e.message : String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-        // #endregion
-        console.error("Failed to generate reply", e);
-        if (!controller.signal.aborted) {
-          setLoadingSuggestions(false);
-        }
-      } finally {
-        if (abortRef.current === controller) {
-          abortRef.current = null;
-        }
-      }
-    }, SUGGESTION_DEBOUNCE_MS);
-
-    return () => {
-      if (debounceRef.current) {
-        window.clearTimeout(debounceRef.current);
-        debounceRef.current = null;
-      }
-      abortRef.current?.abort();
-      abortRef.current = null;
-    };
   }, [
-    contextText,
-    currentProjectId,
-    setLoadingSuggestions,
-    setReplyText,
-    transcript,
+    finalizeDraft,
+    isRecording,
+    setConnected,
+    setRecording,
+    setOtherAudioSource,
+    stopCapture,
   ]);
+
+  const requestSuggestion = useCallback(() => {
+    const state = useAppStore.getState();
+    const projectState = useProjectStore.getState();
+    const history = buildSuggestionHistory(state.transcript);
+    if (history.length === 0) {
+      return;
+    }
+    const id = crypto.randomUUID();
+    addSuggestionRequest(id);
+    const ctx = projectState.contextText;
+    const projectId = projectState.currentProjectId ?? undefined;
+    generateReply(history, ctx, projectId)
+      .then((reply) => setSuggestionResult(id, "done", reply))
+      .catch((e) => {
+        console.error("Failed to generate reply", e);
+        setSuggestionResult(
+          id,
+          "error",
+          e instanceof Error ? e.message : String(e)
+        );
+      });
+  }, [addSuggestionRequest, setSuggestionResult]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -369,9 +314,6 @@ export function useLiveStreaming() {
 
   useEffect(() => {
     return () => {
-      if (debounceRef.current) {
-        window.clearTimeout(debounceRef.current);
-      }
       if (browserFlushTimerRef.current) {
         clearTimeout(browserFlushTimerRef.current);
       }
@@ -384,6 +326,7 @@ export function useLiveStreaming() {
   return {
     startStreaming,
     stopStreaming,
+    requestSuggestion,
     error,
   };
 }

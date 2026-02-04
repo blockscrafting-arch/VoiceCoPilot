@@ -14,7 +14,8 @@ import { useLiveStreaming } from "./hooks/useLiveStreaming";
  */
 function App() {
   const { isRecording } = useAppStore();
-  const { startStreaming, stopStreaming, error } = useLiveStreaming();
+  const { startStreaming, stopStreaming, requestSuggestion, error } =
+    useLiveStreaming();
   const showApiConfigBanner = isProductionWithoutApiConfig();
 
   return (
@@ -43,7 +44,7 @@ function App() {
 
           {/* Suggestions panel - right side */}
           <div className="w-80 p-4 border-l border-gray-700 overflow-hidden">
-            <SuggestionsPanel />
+            <SuggestionsPanel onRequestSuggestion={requestSuggestion} />
           </div>
         </div>
       </main>

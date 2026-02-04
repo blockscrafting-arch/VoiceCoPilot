@@ -16,8 +16,19 @@ interface ControlsProps {
  * Start/stop recording and clear transcript.
  */
 export function Controls({ onStart, onStop, error }: ControlsProps) {
-  const { isRecording, clearTranscript, sttUserMode, setSttUserMode } =
-    useAppStore();
+  const {
+    isRecording,
+    clearTranscript,
+    sttUserMode,
+    setSttUserMode,
+    otherAudioSource,
+  } = useAppStore();
+  const otherSourceLabel =
+    otherAudioSource === "extension"
+      ? "расширение"
+      : otherAudioSource === "display"
+        ? "экран/вкладка"
+        : null;
   const browserAvailable = isBrowserSpeechAvailable();
   const effectiveMode =
     sttUserMode === "auto"
@@ -39,6 +50,7 @@ export function Controls({ onStart, onStop, error }: ControlsProps) {
           <select
             value={sttUserMode}
             onChange={(e) => setSttUserMode(e.target.value as SttUserMode)}
+            aria-label="Режим распознавания речи микрофона"
             className="text-xs bg-gray-700 text-gray-300 border border-gray-600 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary-500"
             title="Авто — браузер, если доступен, иначе сервер. Браузер — Chrome. Сервер — OpenAI."
           >
@@ -59,11 +71,19 @@ export function Controls({ onStart, onStop, error }: ControlsProps) {
             Web Speech недоступен — точность может быть ниже
           </p>
         )}
+        {isRecording && (
+          <p className="text-xs text-gray-500">
+            Собеседник:{" "}
+            {otherSourceLabel ?? "нет источника (только микрофон)"}
+          </p>
+        )}
       </div>
 
       {/* Start/Stop Recording */}
       <button
+        type="button"
         onClick={isRecording ? onStop : onStart}
+        aria-label={isRecording ? "Остановить эфир" : "Начать эфир"}
         className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${
           isRecording
             ? "bg-red-500 hover:bg-red-600 text-white"
@@ -103,7 +123,10 @@ export function Controls({ onStart, onStop, error }: ControlsProps) {
 
       {/* Clear Transcript */}
       <button
+        type="button"
         onClick={clearTranscript}
+        title="Очистить транскрипт и подсказки"
+        aria-label="Очистить транскрипт и подсказки"
         className="flex items-center gap-2 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg font-medium transition-colors"
       >
         <svg
