@@ -22,7 +22,6 @@ export default defineConfig(({ command, mode }) => {
         hypothesisId: "H2",
       }),
     }).catch(() => {});
-    // #endregion
     fetch("http://127.0.0.1:7247/ingest/4d99c64e-0f7e-4f36-90da-c936a6efefa5", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -39,7 +38,14 @@ export default defineConfig(({ command, mode }) => {
     // #endregion
   }
 
+  const buildStamp =
+    process.env.VITE_BUILD_STAMP ||
+    (command === "build" ? new Date().toISOString().slice(0, 19) + "Z" : "");
+
   return {
+    define: {
+      __BUILD_STAMP__: JSON.stringify(buildStamp),
+    },
     plugins: [react()],
     resolve: {
       alias: {

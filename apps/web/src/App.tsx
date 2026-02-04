@@ -19,7 +19,10 @@ function App() {
   const showApiConfigBanner = isProductionWithoutApiConfig();
 
   return (
-    <div className="h-screen flex flex-col bg-gray-900">
+    <div
+      className="h-screen flex flex-col bg-gray-900"
+      title={__BUILD_STAMP__ ? `Build: ${__BUILD_STAMP__}` : undefined}
+    >
       <Header />
 
       {showApiConfigBanner && (
