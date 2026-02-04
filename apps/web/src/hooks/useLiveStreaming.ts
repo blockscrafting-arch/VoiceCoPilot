@@ -17,6 +17,8 @@ const BROWSER_STT_MIN_SEND_CHARS = 6;
 const MERGE_WINDOW_MS = 1800;
 /** If same text arrived from the other speaker within this window (ms), treat as echo and skip. */
 const ECHO_GUARD_WINDOW_MS = 4000;
+/** Max number of previous suggestion texts to send to LLM (avoid prompt bloat). */
+const PREVIOUS_SUGGESTIONS_LIMIT = 10;
 
 /**
  * Hook that wires live audio capture, WebSocket streaming,
@@ -280,11 +282,15 @@ export function useLiveStreaming() {
     if (history.length === 0) {
       return;
     }
+    const previousSuggestions = state.suggestions
+      .filter((s) => s.status === "done" && s.text)
+      .map((s) => s.text!)
+      .slice(-PREVIOUS_SUGGESTIONS_LIMIT);
     const id = crypto.randomUUID();
     addSuggestionRequest(id);
     const ctx = projectState.contextText;
     const projectId = projectState.currentProjectId ?? undefined;
-    generateReply(history, ctx, projectId)
+    generateReply(history, ctx, projectId, previousSuggestions)
       .then((reply) => setSuggestionResult(id, "done", reply))
       .catch((e) => {
         console.error("Failed to generate reply", e);

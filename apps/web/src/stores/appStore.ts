@@ -53,6 +53,8 @@ interface AppState {
   finalizeDraft: (role: "user" | "other") => void;
   /** Append text to last message of role (merge within pause window). */
   appendToLastMessage: (role: "user" | "other", text: string) => void;
+  /** Update message text by index (for inline edit). */
+  editMessage: (index: number, newText: string) => void;
   clearTranscript: () => void;
   setSttUserMode: (mode: SttUserMode) => void;
   setOtherAudioSource: (source: "extension" | "display" | null) => void;
@@ -178,6 +180,21 @@ export const useAppStore = create<AppState>((set) => ({
       return {
         transcript: [...state.transcript, { role, text: trimmed, isDraft: false }],
       };
+    });
+  },
+
+  /**
+   * Update message text by index (for inline edit).
+   * No-op if index out of range or newText empty after trim.
+   */
+  editMessage: (index, newText) => {
+    const trimmed = (newText ?? "").trim();
+    if (!trimmed) return;
+    set((state) => {
+      if (index < 0 || index >= state.transcript.length) return state;
+      const next = [...state.transcript];
+      next[index] = { ...next[index], text: trimmed };
+      return { transcript: next };
     });
   },
 

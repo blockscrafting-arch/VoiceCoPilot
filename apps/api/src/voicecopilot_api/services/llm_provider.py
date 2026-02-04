@@ -44,12 +44,15 @@ class LLMProvider:
         history: list[Message],
         context: str = "",
         model_override: str | None = None,
+        previous_suggestions: list[str] | None = None,
     ) -> str:
         """Generate one full reply from the user to the interlocutor.
 
         Args:
             history: Recent conversation messages.
             context: Additional context about the conversation.
+            model_override: Optional model id override (e.g. from project).
+            previous_suggestions: List of past suggestion texts; model is asked not to repeat.
 
         Returns:
             Single reply text (optimal length for the question).
@@ -70,6 +73,11 @@ class LLMProvider:
         user_content_parts = []
         if context:
             user_content_parts.append(f"Контекст: {context}")
+        prev = previous_suggestions or []
+        if prev:
+            prev_block = "Ты уже предлагал такие ответы:\n" + "\n".join(f"- {s}" for s in prev)
+            prev_block += "\nНе повторяй эту информацию, если она не нужна в текущем контексте."
+            user_content_parts.append(prev_block)
         user_content_parts.append("Вот диалог:")
         user_content_parts.append(dialogue)
         user_content_parts.append(

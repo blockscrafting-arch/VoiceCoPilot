@@ -41,6 +41,7 @@ async def generate_suggestions(
             history=request.history,
             context=request.context,
             model_override=model_override,
+            previous_suggestions=request.previous_suggestions,
         )
         return SuggestionResponse(reply=reply)
     except Exception as e:

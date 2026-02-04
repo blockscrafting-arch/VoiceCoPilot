@@ -1,6 +1,6 @@
 """Pydantic schemas for API request/response models."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Message(BaseModel):
@@ -57,6 +57,7 @@ class SuggestionRequest(BaseModel):
     history: list[Message]
     context: str = ""
     project_id: str | None = None
+    previous_suggestions: list[str] = Field(default_factory=list)
 
 
 class SuggestionResponse(BaseModel):

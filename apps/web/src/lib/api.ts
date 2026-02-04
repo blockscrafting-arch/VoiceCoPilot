@@ -105,6 +105,7 @@ export interface Project {
  * @param history - Recent conversation messages
  * @param context - Additional context
  * @param projectId - Optional project id
+ * @param previousSuggestions - Optional list of past suggestion texts (AI will avoid repeating)
  * @param signal - Optional AbortSignal to cancel the request
  * @returns Single reply text
  */
@@ -112,18 +113,27 @@ export async function generateReply(
   history: Message[],
   context: string = "",
   projectId?: string,
+  previousSuggestions?: string[],
   signal?: AbortSignal
 ): Promise<string> {
   // #region agent log
   if (import.meta.env.DEV) fetch('http://127.0.0.1:7246/ingest/b61f59fc-c1a9-4f8c-ae0e-5d177a7f7853',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:25',message:'reply_fetch_start',data:{baseUrl:getApiBaseUrl(),projectId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
   // #endregion
+  const body: Record<string, unknown> = {
+    history,
+    context,
+    project_id: projectId,
+  };
+  if (previousSuggestions?.length) {
+    body.previous_suggestions = previousSuggestions;
+  }
   const response = await fetch(`${getApiBaseUrl()}/api/suggestions/generate`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...authHeaders(),
     },
-    body: JSON.stringify({ history, context, project_id: projectId }),
+    body: JSON.stringify(body),
     signal,
   });
 
