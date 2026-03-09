@@ -28,6 +28,12 @@ tests/          # Unit, integration, e2e tests
 docs/           # Documentation and ADRs
 ```
 
+## Documentation
+
+- **[Полная документация (docs/DOCUMENTATION.md)](docs/DOCUMENTATION.md)** — архитектура, компоненты, API, конфигурация, деплой и сценарии.
+- [Установка и запуск](docs/SETUP.md) — требования, шаги установки, тесты, troubleshooting.
+- [Веб-деплой](docs/DEPLOY_WEB.md) — Railway, Vercel, расширение.
+
 ## Quick Start
 
 - **Desktop:** run API + Tauri app locally (see Setup below).

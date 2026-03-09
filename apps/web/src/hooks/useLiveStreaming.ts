@@ -38,7 +38,7 @@ export function useLiveStreaming() {
     setOtherAudioSource,
     sttUserMode,
   } = useAppStore();
-  const { currentProjectId } = useProjectStore();
+  const currentProjectId = useProjectStore((s) => s.currentProjectId);
 
   const effectiveSttUserMode =
     sttUserMode === "auto"
